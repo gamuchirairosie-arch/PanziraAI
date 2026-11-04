@@ -1,0 +1,23 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="48.8182" height="60.2091" viewBox="0 0 48.8182 60.2091" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Editable report pin" clip-path="url(#clip0_53_721)">
+<g id="Verification pin">
+<use xlink:href="#stroke0_53_721" fill="#D5A528"/>
+<mask id="stroke1_53_721" fill="white">
+<use xlink:href="#stroke0_53_721"/>
+</mask>
+<path d="M24.4091 0C10.1705 0 0 10.3809 0 23.876C0 35.295 15.2557 50.8663 24.4091 60.2091C33.5625 50.8663 48.8182 35.295 48.8182 23.876C48.8182 10.3809 38.6477 0 24.4091 0Z" stroke-width="4" stroke="white" mask="url(#stroke1_53_721)"/>
+</g>
+<g id="map-pin" clip-path="url(#clip1_53_721)">
+<path id="Vector" d="M29.8328 18.1712C29.8328 21.5569 26.0776 25.083 24.8165 26.172C24.6991 26.2603 24.5561 26.3081 24.4091 26.3081C24.2621 26.3081 24.1191 26.2603 24.0016 26.172C22.7406 25.083 18.9854 21.5569 18.9854 18.1712C18.9854 16.7324 19.5568 15.3526 20.574 14.3353C21.5911 13.318 22.9706 12.7464 24.4091 12.7464C25.8475 12.7464 27.2271 13.318 28.2442 14.3353C29.2614 15.3526 29.8328 16.7324 29.8328 18.1712ZM26.443 18.1712C26.443 19.2947 25.5324 20.2055 24.4091 20.2055C23.2858 20.2055 22.3752 19.2947 22.3752 18.1712C22.3752 17.0477 23.2858 16.1369 24.4091 16.1369C25.5324 16.1369 26.443 17.0477 26.443 18.1712Z" stroke-width="1.6" stroke-linecap="round" stroke="#785B0A"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_53_721">
+<rect width="48.8182" height="60.2091" fill="white"/>
+</clipPath>
+<path id="stroke0_53_721" d="M24.4091 0C10.1705 0 0 10.3809 0 23.876C0 35.295 15.2557 50.8663 24.4091 60.2091C33.5625 50.8663 48.8182 35.295 48.8182 23.876C48.8182 10.3809 38.6477 0 24.4091 0Z"/>
+<clipPath id="clip1_53_721">
+<rect width="16.2727" height="16.2727" fill="white" transform="translate(16.2727 11.3909)"/>
+</clipPath>
+</defs>
+</svg>

@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="38" height="32" viewBox="0 0 38 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Road mark" clip-path="url(#clip0_53_794)">
+<path id="Road" d="M0 32C10 12.8 20 4.26667 38 0C25 11.7333 22 22.4 25 32H0Z" fill="#145438"/>
+<path id="Shoulder" d="M0 32C10 12.8 20 4.26667 38 0C22 7.46667 12 19.2 6 32H0Z" fill="#BD9222"/>
+<path id="Lane markings" d="M0 32L5.06667 23.6522M10.1333 18.087L20.2667 9.73913M27.8667 5.56522L38 0" stroke-width="2" stroke="white"/>
+</g>
+<defs>
+<clipPath id="clip0_53_794">
+<rect width="38" height="32" fill="white"/>
+</clipPath>
+</defs>
+</svg>

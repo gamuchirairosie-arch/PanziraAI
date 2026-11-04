@@ -1,0 +1,20 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="70.9091" height="87.4545" viewBox="0 0 70.9091 87.4545" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Editable report pin" clip-path="url(#clip0_53_309)">
+<g id="Verification pin">
+<use xlink:href="#stroke0_53_309" fill="#176B45"/>
+<mask id="stroke1_53_309" fill="white">
+<use xlink:href="#stroke0_53_309"/>
+</mask>
+<path d="M35.4545 0C14.7727 0 0 15.0784 0 34.6802C0 51.2665 22.1591 73.884 35.4545 87.4545C48.75 73.884 70.9091 51.2665 70.9091 34.6802C70.9091 15.0784 56.1364 0 35.4545 0Z" stroke-width="4" stroke="white" mask="url(#stroke1_53_309)"/>
+</g>
+<g id="check">
+<path id="Vector" d="M43.3325 22.4545L32.5003 33.2871L27.5765 28.3632" stroke-width="1.6" stroke-linecap="round" stroke="white"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_53_309">
+<rect width="70.9091" height="87.4545" fill="white"/>
+</clipPath>
+<path id="stroke0_53_309" d="M35.4545 0C14.7727 0 0 15.0784 0 34.6802C0 51.2665 22.1591 73.884 35.4545 87.4545C48.75 73.884 70.9091 51.2665 70.9091 34.6802C70.9091 15.0784 56.1364 0 35.4545 0Z"/>
+</defs>
+</svg>

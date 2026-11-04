@@ -1,0 +1,19 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="30" height="37" viewBox="0 0 30 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Editable report pin" clip-path="url(#clip0_53_756)">
+<g id="Verification pin">
+<path d="M15 0C6.25 0 0 6.37931 0 14.6724C0 21.6897 9.375 31.2586 15 37C20.625 31.2586 30 21.6897 30 14.6724C30 6.37931 23.75 0 15 0Z" fill="#176B45"/>
+<mask id="stroke0_53_756" fill="white">
+<path d="M15 0C6.25 0 0 6.37931 0 14.6724C0 21.6897 9.375 31.2586 15 37C20.625 31.2586 30 21.6897 30 14.6724C30 6.37931 23.75 0 15 0Z"/>
+</mask>
+<path d="M15 0C6.25 0 0 6.37931 0 14.6724C0 21.6897 9.375 31.2586 15 37C20.625 31.2586 30 21.6897 30 14.6724C30 6.37931 23.75 0 15 0Z" stroke-width="4" stroke="white" mask="url(#stroke0_53_756)"/>
+</g>
+<g id="check">
+<path id="Vector" d="M20.3328 11L13.0002 18.3328L9.6672 14.9997" stroke-width="1.6" stroke-linecap="round" stroke="white"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_53_756">
+<rect width="30" height="37" fill="white"/>
+</clipPath>
+</defs>
+</svg>
