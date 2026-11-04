@@ -4,6 +4,7 @@ import { CorridorContextMap } from '../components/BulawayoMap';
 import { EvidencePhotoFrame } from '../components/CroppedFigmaMedia';
 import { CompactReportPicker } from '../components/CompactReportPicker';
 import { usePanzira } from '../context/PanziraContext';
+import { useCardFocus } from '../context/CardFocusContext';
 import { VerificationChecklist } from '../types';
 
 type InboxFilter = 'all' | 'lead' | 'verifying' | 'verified';
@@ -26,6 +27,7 @@ export const SignalInboxView: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = useState<InboxFilter>('all');
   const [channelFilter, setChannelFilter] = useState<'all' | 'web' | 'whatsapp' | 'ussd'>('all');
+  const { focusCard } = useCardFocus();
 
   const filteredSignals = useMemo(() => {
     const q = newsroomSearch.trim().toLowerCase();
@@ -180,10 +182,10 @@ export const SignalInboxView: React.FC = () => {
         </div>
       </div>
 
-      {/* Two-Column Inbox Split */}
-      <div className="pz-inbox-split">
+      {/* Focus-first inbox queue */}
+      <div className="pz-inbox-split pz-inbox-split-focus">
         {/* Left: Queue */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div className="pz-inbox-queue">
           {filteredSignals.length === 0 ? (
             <div className="pz-card-panel" data-testid="inbox-queue-empty">
               <p style={{ fontSize: '13.5px', color: 'var(--pz-muted)' }}>
@@ -202,9 +204,25 @@ export const SignalInboxView: React.FC = () => {
                   type="button"
                   data-testid={`inbox-card-${sig.id}`}
                   className={`pz-signal-card ${isSelected ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedInboxId(sig.id)}
+                  onClick={() => {
+                    setSelectedInboxId(sig.id);
+                    focusCard({
+                      type: 'signal',
+                      signalId: sig.id,
+                      title: sig.inboxTitle || sig.title,
+                      subtitle: `${sig.roadArea} · ${sig.landmark}`,
+                      categoryLabel: 'INCOMING CITIZEN REPORT',
+                      badge: sig.inboxStatusLine,
+                      badgeColor:
+                        sig.workflowStatus === 'verified'
+                          ? 'green'
+                          : sig.isGraphicImage || sig.workflowStatus === 'rejected'
+                            ? 'red'
+                            : 'amber',
+                    });
+                  }}
                 >
-                  <div className="pz-signal-meta-row">
+                  <div className="pz-signal-meta-row pz-inbox-card-meta">
                     <span
                       className={`pz-source-tag ${
                         sig.workflowStatus === 'verified'
@@ -216,7 +234,7 @@ export const SignalInboxView: React.FC = () => {
                     >
                       {sig.inboxStatusLine}
                     </span>
-                    <span style={{ color: 'var(--pz-muted)' }}>{sig.timeShort}</span>
+                    <span className="pz-inbox-card-time">{sig.timeShort}</span>
                   </div>
 
                   <div className="pz-signal-card-title">{sig.inboxTitle || sig.title}</div>
@@ -225,14 +243,7 @@ export const SignalInboxView: React.FC = () => {
                   </div>
 
                   <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '6px',
-                      flexWrap: 'wrap',
-                      marginTop: '4px',
-                    }}
+                      className="pz-inbox-card-footer"
                   >
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       <span className="pz-badge pz-badge-neutral">{sig.id}</span>
@@ -252,7 +263,7 @@ export const SignalInboxView: React.FC = () => {
                         <span className="pz-badge pz-badge-critical">Graphic blurred</span>
                       )}
                     </div>
-                    <span style={{ fontSize: '12px', color: 'var(--pz-muted)', fontWeight: 600 }}>
+                    <span className="pz-inbox-card-checks">
                       {metCount}/4 checks
                     </span>
                   </div>

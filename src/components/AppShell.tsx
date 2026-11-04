@@ -67,9 +67,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       {/* Demonstration Banner */}
       <aside className="pz-demo-banner" role="status" aria-label="Demonstration environment notice">
         <div className="pz-demo-banner-content">
-          <strong>Demonstration Scenario</strong>
+          <strong>Demonstration scenario</strong>
           <span>
-            Fictional incidents for Bulawayo verification simulation. Citizen reports enter an unverified queue; AI never auto-publishes public safety warnings. Municipal integration pending authorization.
+            Fictional Bulawayo incidents. Every report stays unverified until a human editor approves it.
           </span>
         </div>
         <span style={{ fontSize: '11px', opacity: 0.85, whiteSpace: 'nowrap' }}>

@@ -860,9 +860,6 @@ export const PublicDashboardView: React.FC = () => {
                       >
                         PANZIRA VERIFIED
                       </span>
-                      <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
-                        {alert.updatedAgo}
-                      </span>
                     </div>
                   </button>
                 );

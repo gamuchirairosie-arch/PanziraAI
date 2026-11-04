@@ -458,24 +458,46 @@ export const FleetCorridorDeskView: React.FC = () => {
             <span className="pz-field-label" style={{ color: 'var(--pz-primary-green)' }}>
               Simulated API contract · {selectedCorridor.apiEndpoint}
             </span>
-            <span className="pz-badge pz-badge-neutral">Read-only demo JSON</span>
+            <span className="pz-badge pz-badge-neutral">Demo preview</span>
           </div>
 
-          <pre
-            style={{
-              margin: 0,
-              padding: '14px',
-              background: 'var(--pz-pale)',
-              border: '1px solid var(--pz-border)',
-              borderRadius: '4px',
-              fontSize: '12.5px',
-              lineHeight: 1.5,
-              overflowX: 'auto',
-              color: 'var(--pz-text)',
-            }}
-          >
-            {samplePayload}
-          </pre>
+          <section className="pz-fleet-summary" aria-label={`${selectedCorridor.fleetName} corridor summary`}>
+            <h2 className="pz-card-title">{selectedCorridor.fleetName}</h2>
+            <span
+              className={`pz-badge ${selectedCorridor.badgeColor === 'red' ? 'pz-badge-critical' : 'pz-badge-amber'}`}
+            >
+              {selectedCorridor.fleetBadge}
+            </span>
+
+            <div className="pz-fleet-summary-grid">
+              <div>
+                <span className="pz-field-label">Confidence</span>
+                <span className="pz-field-value">{selectedCorridor.fleetConfidenceLine}</span>
+              </div>
+              <div>
+                <span className="pz-field-label">Clustered leads</span>
+                <span className="pz-field-value">{selectedCorridor.clusterCount}</span>
+              </div>
+              <div>
+                <span className="pz-field-label">Verified alerts nearby</span>
+                <span className="pz-field-value">{verifiedAlerts.length}</span>
+              </div>
+              <div>
+                <span className="pz-field-label">Prediction status</span>
+                <span className="pz-field-value">Screening only · not statistically validated</span>
+              </div>
+            </div>
+
+            <div className="pz-notice-box-bordered">
+              <strong>Recommended action</strong>
+              <p>{selectedCorridor.fleetRecommendation}</p>
+            </div>
+          </section>
+
+          <details className="pz-fleet-api-details">
+            <summary>View raw demo response</summary>
+            <pre>{samplePayload}</pre>
+          </details>
         </div>
       </div>
     </div>

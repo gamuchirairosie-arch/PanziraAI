@@ -659,6 +659,15 @@ select:focus-visible,
   gap: 6px;
 }
 
+.pz-signal-metrics-compact .pz-metric-card {
+  padding: 12px 14px;
+  gap: 4px;
+}
+
+.pz-signal-metrics-compact .pz-metric-card > span:last-child {
+  display: none;
+}
+
 .pz-metric-value {
   font-family: var(--font-sans);
   font-weight: 700;
@@ -682,6 +691,15 @@ select:focus-visible,
   gap: 16px;
   align-items: start;
   width: 100%;
+}
+
+/* Keep the signal queue as the main page; open one report in the focus reader. */
+.pz-triage-grid-focus-first {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pz-triage-grid-focus-first > [aria-label='Selected signal inspection workbench'] {
+  display: none;
 }
 
 .pz-triage-col {
@@ -780,6 +798,25 @@ select:focus-visible,
   font-size: 13px;
   color: var(--pz-muted);
   line-height: 1.4;
+}
+
+/* Keep cards compact and reserve a quiet corner for the click affordance. */
+.pz-signal-card .pz-expand-hint-pill {
+  font-size: 0;
+  top: auto;
+  bottom: 10px;
+}
+
+.pz-signal-card .pz-expand-hint-pill::after,
+.pz-alert-row-card .pz-expand-hint-pill::after {
+  content: 'Open';
+  font-size: 11px;
+}
+
+.pz-alert-row-card .pz-expand-hint-pill {
+  font-size: 0;
+  top: auto;
+  bottom: 10px;
 }
 
 .pz-signal-status-dot {
@@ -921,6 +958,50 @@ select:focus-visible,
   gap: 24px;
   align-items: start;
   width: 100%;
+}
+
+.pz-inbox-split-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pz-inbox-split-focus > [data-testid='inbox-detail-panel'],
+.pz-inbox-split-focus > [data-testid='inbox-empty-selection'] {
+  display: none;
+}
+
+.pz-inbox-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.pz-inbox-card-meta {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.pz-inbox-card-time {
+  color: var(--pz-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pz-inbox-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.pz-inbox-card-checks {
+  color: var(--pz-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .pz-verify-split {
@@ -1456,6 +1537,57 @@ select:focus-visible,
   gap: 24px;
   align-items: start;
   width: 100%;
+}
+
+.pz-fleet-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.pz-fleet-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 22px;
+  width: 100%;
+  padding: 16px 0;
+  border-top: 1px solid var(--pz-border);
+  border-bottom: 1px solid var(--pz-border);
+}
+
+.pz-fleet-summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pz-fleet-api-details {
+  margin-top: 18px;
+  border-top: 1px solid var(--pz-border);
+  padding-top: 12px;
+}
+
+.pz-fleet-api-details summary {
+  color: var(--pz-primary-green);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pz-fleet-api-details pre {
+  margin: 10px 0 0;
+  padding: 12px;
+  background: var(--pz-pale);
+  border: 1px solid var(--pz-border);
+  border-radius: 4px;
+  color: var(--pz-text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .pz-brief-split {
@@ -2171,3 +2303,218 @@ select:focus-visible,
   }
 }
 
+
+/* =========================================================================
+   DECLUTTER PASS: slim stats, list rows, quieter expand affordance
+   ========================================================================= */
+
+/* The hover "Expand" pill collided with badges and added noise to every card.
+   Cards stay clickable: hover shows a green border and pointer cursor. */
+.pz-expand-hint-pill {
+  display: none !important;
+}
+
+.pz-expandable-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.pz-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 980px;
+}
+
+.pz-stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 36px;
+  padding: 14px 0;
+  border-top: 1px solid var(--pz-card-border);
+  border-bottom: 1px solid var(--pz-card-border);
+}
+
+.pz-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pz-stat:hover .pz-stat-label {
+  color: var(--pz-primary-green);
+}
+
+.pz-stat-value {
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--pz-text);
+}
+
+.pz-stat-value.is-amber {
+  color: var(--pz-amber-text);
+}
+
+.pz-stat-value.is-green {
+  color: var(--pz-primary-green);
+}
+
+.pz-stat-label {
+  font-size: 13px;
+  color: var(--pz-muted);
+}
+
+.pz-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.pz-count {
+  font-weight: 500;
+  color: var(--pz-muted);
+  margin-left: 4px;
+}
+
+.pz-row-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--pz-card-border);
+}
+
+.pz-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto 14px;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--pz-card-border);
+  border-radius: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pz-row:hover {
+  background: var(--pz-pale);
+  border-color: var(--pz-card-border) !important;
+}
+
+.pz-row.is-closed {
+  opacity: 0.72;
+}
+
+.pz-row-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pz-muted);
+}
+
+.pz-row-dot.is-green { background: var(--pz-primary-green); }
+.pz-row-dot.is-gold { background: var(--pz-gold); }
+.pz-row-dot.is-red { background: var(--pz-red); }
+
+.pz-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pz-row-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--pz-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pz-row-meta {
+  font-size: 12.5px;
+  color: var(--pz-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pz-row-status {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pz-row-status.is-green { color: var(--pz-primary-green); }
+.pz-row-status.is-gold { color: var(--pz-amber-text); }
+.pz-row-status.is-red { color: var(--pz-red); }
+
+.pz-row-time {
+  font-size: 12.5px;
+  color: var(--pz-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: right;
+}
+
+.pz-row-chev {
+  color: var(--pz-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.pz-link-btn {
+  background: none;
+  border: 0;
+  padding: 10px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pz-primary-green);
+  cursor: pointer;
+}
+
+.pz-link-btn:hover {
+  text-decoration: underline;
+}
+
+.pz-closed-group {
+  margin-top: 6px;
+}
+
+.pz-list-empty {
+  color: var(--pz-muted);
+  font-size: 13.5px;
+  padding: 12px 8px;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .pz-row {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .pz-row-time,
+  .pz-row-chev {
+    display: none;
+  }
+  .pz-stat-strip {
+    gap: 10px 24px;
+  }
+  .pz-fleet-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
