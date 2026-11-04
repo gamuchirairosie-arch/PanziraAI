@@ -51,16 +51,6 @@ export const HotspotIntelligenceView: React.FC = () => {
         </button>
       </div>
 
-      {/* Mandatory Statistical Uncertainty Notice */}
-      <div className="pz-notice-box-bordered">
-        <p style={{ fontSize: '13px', color: 'var(--pz-text)' }}>
-          <strong>Demo data · Possible patterns, not crash predictions:</strong> Corridor watchlist
-          scores reflect clustered citizen and public-page mentions. They are{' '}
-          <strong>not</strong> statistically validated crash forecasts; repeated reports may share a
-          single source or reflect commuter reporting volume.
-        </p>
-      </div>
-
       {/* 4 Screening Metrics */}
       <section className="pz-metrics-grid-4" aria-label="Hotspot screening metrics">
         <div className="pz-metric-card">

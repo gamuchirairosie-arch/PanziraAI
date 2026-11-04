@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ASSETS } from '../assetsMap';
 import { CorridorContextMap } from '../components/BulawayoMap';
 import { EvidencePhotoFrame } from '../components/CroppedFigmaMedia';
+import { CompactReportPicker } from '../components/CompactReportPicker';
 import { usePanzira } from '../context/PanziraContext';
 import { VerificationChecklist } from '../types';
 
@@ -24,11 +25,16 @@ export const SignalInboxView: React.FC = () => {
   } = usePanzira();
 
   const [statusFilter, setStatusFilter] = useState<InboxFilter>('all');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'web' | 'whatsapp' | 'ussd'>('all');
 
   const filteredSignals = useMemo(() => {
     const q = newsroomSearch.trim().toLowerCase();
     return signals.filter((sig) => {
       if (statusFilter !== 'all' && sig.workflowStatus !== statusFilter) return false;
+      const ch = (sig.sourceChannelLabel || '').toLowerCase();
+      if (channelFilter === 'web' && !ch.includes('web')) return false;
+      if (channelFilter === 'whatsapp' && !ch.includes('whatsapp')) return false;
+      if (channelFilter === 'ussd' && !ch.includes('ussd')) return false;
       if (!q) return true;
       return (
         sig.title.toLowerCase().includes(q) ||
@@ -40,7 +46,7 @@ export const SignalInboxView: React.FC = () => {
         sig.id.toLowerCase().includes(q)
       );
     });
-  }, [signals, statusFilter, newsroomSearch]);
+  }, [signals, statusFilter, channelFilter, newsroomSearch]);
 
   // Bug 5 fix: keep selectedInboxId synchronized with filteredSignals so excluded items never linger
   useEffect(() => {
@@ -116,37 +122,62 @@ export const SignalInboxView: React.FC = () => {
         </div>
       </section>
 
-      <div className="pz-notice-box-bordered">
-        <p style={{ fontSize: '13px', color: 'var(--pz-text)' }}>
-          <strong>Demo data · Editorial provenance:</strong> Similar social or web reports may share
-          a single source and do not count as independent corroboration. Potentially graphic crash
-          images remain blurred unless an editor temporarily inspects them inside the newsroom
-          workspace.
-        </p>
-      </div>
+      {/* Filter Bar with Status & Channel Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+          borderBottom: '1px solid var(--pz-border)',
+          paddingBottom: '12px',
+        }}
+      >
+        <div className="pz-filter-pill-row" role="tablist" aria-label="Filter inbox by review status">
+          {(
+            [
+              { key: 'all', label: 'All' },
+              { key: 'lead', label: 'Leads' },
+              { key: 'verifying', label: 'Verifying' },
+              { key: 'verified', label: 'Verified' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              data-testid={`inbox-filter-${tab.key}`}
+              aria-selected={statusFilter === tab.key}
+              className={`pz-filter-btn ${statusFilter === tab.key ? 'is-active' : ''}`}
+              onClick={() => setStatusFilter(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Filter Bar */}
-      <div className="pz-filter-pill-row" role="tablist" aria-label="Filter inbox by review status">
-        {(
-          [
-            { key: 'all', label: 'All submissions' },
-            { key: 'lead', label: 'Leads' },
-            { key: 'verifying', label: 'Verifying' },
-            { key: 'verified', label: 'Verified' },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            data-testid={`inbox-filter-${tab.key}`}
-            aria-selected={statusFilter === tab.key}
-            className={`pz-filter-btn ${statusFilter === tab.key ? 'is-active' : ''}`}
-            onClick={() => setStatusFilter(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', color: 'var(--pz-muted)', fontWeight: 600 }}>Channel:</span>
+          {(
+            [
+              { key: 'all', label: 'All' },
+              { key: 'web', label: 'Web' },
+              { key: 'whatsapp', label: 'WhatsApp' },
+              { key: 'ussd', label: 'USSD' },
+            ] as const
+          ).map((ch) => (
+            <button
+              key={ch.key}
+              type="button"
+              className={`pz-filter-btn ${channelFilter === ch.key ? 'is-active' : ''}`}
+              style={{ padding: '3px 8px', fontSize: '11.5px' }}
+              onClick={() => setChannelFilter(ch.key)}
+            >
+              {ch.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Two-Column Inbox Split */}
@@ -205,6 +236,13 @@ export const SignalInboxView: React.FC = () => {
                   >
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       <span className="pz-badge pz-badge-neutral">{sig.id}</span>
+                      {sig.sourceChannelLabel?.toLowerCase().includes('whatsapp') ? (
+                        <span className="pz-badge pz-badge-whatsapp">WhatsApp</span>
+                      ) : sig.sourceChannelLabel?.toLowerCase().includes('ussd') ? (
+                        <span className="pz-badge pz-badge-ussd">USSD</span>
+                      ) : (
+                        <span className="pz-badge pz-badge-web">Web</span>
+                      )}
                       {sig.originalLanguage !== 'English' && (
                         <span className="pz-badge pz-badge-amber">
                           {sig.originalLanguage} → EN draft
@@ -251,14 +289,19 @@ export const SignalInboxView: React.FC = () => {
                   <span
                     className={`pz-badge ${
                       selectedLead.workflowStatus === 'verified'
-                        ? 'pz-badge-verified'
+                        ? 'pz-badge-panzira-verified'
                         : selectedLead.isCritical || selectedLead.isGraphicImage
                           ? 'pz-badge-critical'
                           : 'pz-badge-amber'
                     }`}
+                    title={
+                      selectedLead.workflowStatus === 'verified'
+                        ? 'Panzira Verified · Independent newsroom check (Municipal integration pending authorization)'
+                        : undefined
+                    }
                   >
                     {selectedLead.workflowStatus === 'verified'
-                      ? 'Verified & approved'
+                      ? 'PANZIRA VERIFIED · Approved'
                       : `Severity: ${selectedLead.severityLabel}`}
                   </span>
                 </div>
@@ -519,6 +562,7 @@ export const IncidentVerificationView: React.FC = () => {
   const [compareModalOpen, setCompareModalOpen] = useState(false);
   const [followUpInputOpen, setFollowUpInputOpen] = useState(false);
   const [followUpPrompt, setFollowUpPrompt] = useState('');
+  const [showAdvancedAi, setShowAdvancedAi] = useState(false);
 
   const signal = useMemo(() => {
     return signals.find((s) => s.id === selectedVerifyId) || signals[0];
@@ -568,30 +612,19 @@ export const IncidentVerificationView: React.FC = () => {
           <strong>{signal.id}</strong>
         </div>
 
-        {/* Quick switcher to inspect Shona, Duplicate Cluster, Graphic Blur, or Citizen Report */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {/* Quick compact report switcher with search & keyboard navigation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <label
-            htmlFor="pz-verify-select"
+            id="pz-verify-select-label"
             style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--pz-muted)' }}
           >
             Inspect submission:
           </label>
-          <select
-            id="pz-verify-select"
-            className="pz-select"
-            style={{ width: 'auto', minWidth: '240px', padding: '7px 10px', fontSize: '13px' }}
-            value={signal.id}
-            onChange={(e) => setSelectedVerifyId(e.target.value)}
-          >
-            {signals.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.id} — {s.title}
-                {s.originalLanguage !== 'English' ? ` (${s.originalLanguage})` : ''}
-                {s.isGraphicImage ? ' [Graphic blurred]' : ''}
-                {s.isUserSubmitted ? ' [Your report]' : ''}
-              </option>
-            ))}
-          </select>
+          <CompactReportPicker
+            signals={signals}
+            selectedId={signal.id}
+            onSelect={(id) => setSelectedVerifyId(id)}
+          />
         </div>
       </div>
 
@@ -610,14 +643,19 @@ export const IncidentVerificationView: React.FC = () => {
             <span
               className={`pz-badge ${
                 signal.workflowStatus === 'verified'
-                  ? 'pz-badge-verified'
+                  ? 'pz-badge-panzira-verified'
                   : signal.workflowStatus === 'rejected'
                     ? 'pz-badge-critical'
                     : 'pz-badge-amber'
               }`}
+              title={
+                signal.workflowStatus === 'verified'
+                  ? 'Panzira Verified · Independent newsroom check (Municipal integration pending authorization)'
+                  : undefined
+              }
             >
               {signal.workflowStatus === 'verified'
-                ? 'Verified & approved for public map'
+                ? 'PANZIRA VERIFIED · Approved for public map'
                 : signal.workflowStatus === 'rejected'
                   ? 'Rejected · Withheld from public'
                   : 'Unverified · Held at editor gate'}
@@ -763,7 +801,7 @@ export const IncidentVerificationView: React.FC = () => {
             )}
           </div>
 
-          {/* AI Analysis · Suggestions, not proof */}
+          {/* AI Analysis · Suggestions, not proof with Progressive Disclosure */}
           <div className="pz-card-panel">
             <div
               style={{
@@ -771,10 +809,21 @@ export const IncidentVerificationView: React.FC = () => {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 gap: '8px',
+                flexWrap: 'wrap',
               }}
             >
-              <h2 className="pz-subsection-heading">AI analysis</h2>
-              <span className="pz-badge pz-badge-amber">Suggestions, not proof</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 className="pz-subsection-heading">AI pre-triage analysis</h2>
+                <span className="pz-badge pz-badge-amber">Suggestions, not proof</span>
+              </div>
+              <button
+                type="button"
+                className="pz-btn-secondary"
+                style={{ padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
+                onClick={() => setShowAdvancedAi(!showAdvancedAi)}
+              >
+                {showAdvancedAi ? 'Hide details ▴' : 'Show advanced metrics ▾'}
+              </button>
             </div>
 
             <div className="pz-extract-2col">
@@ -786,36 +835,66 @@ export const IncidentVerificationView: React.FC = () => {
                 <div className="pz-field-label">Corridor match</div>
                 <div className="pz-field-value">{signal.aiLikelyCorridor}</div>
               </div>
-              <div>
-                <div className="pz-field-label">Location precision</div>
-                <div className="pz-field-value" style={{ color: 'var(--pz-amber-text)' }}>
-                  {signal.aiLocationPrecision}
+            </div>
+
+            {showAdvancedAi && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid var(--pz-border)',
+                }}
+              >
+                <div className="pz-extract-2col">
+                  <div>
+                    <div className="pz-field-label">Location precision</div>
+                    <div className="pz-field-value" style={{ color: 'var(--pz-amber-text)' }}>
+                      {signal.aiLocationPrecision}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="pz-field-label">Confidence indicator</div>
+                    <div className="pz-field-value" style={{ color: 'var(--pz-amber-text)' }}>
+                      {signal.aiConfidenceNote}
+                    </div>
+                    <div
+                      style={{
+                        height: '6px',
+                        background: 'var(--pz-pale)',
+                        borderRadius: '3px',
+                        marginTop: '6px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${signal.aiConfidencePercent}%`,
+                          height: '100%',
+                          background: 'var(--pz-gold)',
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="pz-field-label">Confidence indicator</div>
-                <div className="pz-field-value" style={{ color: 'var(--pz-amber-text)' }}>
-                  {signal.aiConfidenceNote}
-                </div>
+
                 <div
                   style={{
-                    height: '6px',
-                    background: 'var(--pz-pale)',
-                    borderRadius: '3px',
-                    marginTop: '6px',
-                    overflow: 'hidden',
+                    fontSize: '12px',
+                    color: 'var(--pz-muted)',
+                    background: 'var(--pz-cream)',
+                    padding: '8px 10px',
+                    borderRadius: '4px',
+                    lineHeight: 1.45,
                   }}
                 >
-                  <div
-                    style={{
-                      width: `${signal.aiConfidencePercent}%`,
-                      height: '100%',
-                      background: 'var(--pz-gold)',
-                    }}
-                  />
+                  <strong>Audit notice:</strong> AI model proposals are purely advisory. Autonomous
+                  publishing is disabled by design. All public road safety alerts require unanimous
+                  4-point human verification.
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Duplicate Cluster & Source Comparison */}

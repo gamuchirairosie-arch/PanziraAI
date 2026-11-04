@@ -42,10 +42,16 @@ class User(Base, FlexModel):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
-    full_name = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)
+    password_hash = Column(String(255), nullable=True)
+    full_name = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=True)
     role = Column(String(50), nullable=False, default="journalist")
+    can_view_graphic = Column(Boolean, default=False, nullable=True)
     is_active = Column(Boolean, default=True)
+    active = Column(Boolean, default=True)
+    failed_logins = Column(Integer, default=0, nullable=True)
+    locked_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Synonyms

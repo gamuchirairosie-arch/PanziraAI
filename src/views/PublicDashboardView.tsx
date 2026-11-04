@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ASSETS } from '../assetsMap';
 import { PublicBulawayoMap } from '../components/BulawayoMap';
+import { WhatsAppSimulatorModal } from '../components/WhatsAppSimulatorModal';
+import { UssdSimulatorModal } from '../components/UssdSimulatorModal';
 import { usePanzira } from '../context/PanziraContext';
 import { VerifiedPublicAlert } from '../types';
 
@@ -23,6 +25,9 @@ export const PublicDashboardView: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<PublicCategoryFilter>('all');
   const [severityOnlyCritical, setSeverityOnlyCritical] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>('PZ-PUB-102');
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [showUssdModal, setShowUssdModal] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'map' | 'alerts'>('map');
 
   const filteredAlerts = useMemo(() => {
     const q = publicSearch.trim().toLowerCase();
@@ -160,7 +165,12 @@ export const PublicDashboardView: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-          <span className="pz-badge pz-badge-verified">Verified</span>
+          <span
+            className="pz-badge-panzira-verified"
+            title="Panzira Verified · Independent newsroom check (Municipal integration pending authorization)"
+          >
+            PANZIRA VERIFIED
+          </span>
           <span
             className={`pz-badge ${alert.isCritical ? 'pz-badge-critical' : 'pz-badge-neutral'
               }`}
@@ -277,14 +287,19 @@ export const PublicDashboardView: React.FC = () => {
                     </span>
                     <span
                       className={`pz-badge ${item.workflowStatus === 'verified'
-                        ? 'pz-badge-verified'
+                        ? 'pz-badge-panzira-verified'
                         : item.workflowStatus === 'rejected'
                           ? 'pz-badge-critical'
                           : 'pz-badge-amber'
                         }`}
+                      title={
+                        item.workflowStatus === 'verified'
+                          ? 'Panzira Verified · Independent newsroom check (Municipal integration pending authorization)'
+                          : undefined
+                      }
                     >
                       {item.workflowStatus === 'verified'
-                        ? 'Independently verified & published'
+                        ? 'Panzira Verified · Published'
                         : item.workflowStatus === 'rejected'
                           ? 'Not corroborated · Archived'
                           : item.monitorStatusLabel.toLowerCase().includes('evidence requested')
@@ -418,7 +433,12 @@ export const PublicDashboardView: React.FC = () => {
                       alt=""
                       style={{ width: '18px', height: '18px' }}
                     />
-                    <span className="pz-badge pz-badge-verified">Verified</span>
+                    <span
+                      className="pz-badge-panzira-verified"
+                      title="Panzira Verified · Independent newsroom check (Municipal integration pending authorization)"
+                    >
+                      PANZIRA VERIFIED
+                    </span>
                     <span
                       className={`pz-badge ${alert.isCritical ? 'pz-badge-critical' : 'pz-badge-neutral'
                         }`}
@@ -503,37 +523,71 @@ export const PublicDashboardView: React.FC = () => {
   // DEFAULT PUBLIC VIEW: OVERVIEW
   // =========================================================================
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div>
-        <h1 className="pz-page-title">Road safety overview · Bulawayo</h1>
-        <p className="pz-page-subtitle">
-          Approved road safety alerts and hazard trends across Bulawayo.
-        </p>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Header & Direct Reporting Actions */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap',
+          borderBottom: '1px solid var(--pz-border)',
+          paddingBottom: '16px',
+        }}
+      >
+        <div>
+          <h1 className="pz-page-title" style={{ fontSize: '28px' }}>
+            Bulawayo Road Safety Dashboard
+          </h1>
+          <p className="pz-page-subtitle" style={{ fontSize: '15px', marginTop: '2px' }}>
+            Live verified hazard alerts and road surface conditions across Bulawayo corridors.
+          </p>
+        </div>
 
-      {/* Notice Box */}
-      <div className="pz-notice-box-bordered">
-        <p style={{ fontSize: '13.5px', color: 'var(--pz-text)' }}>
-          <strong>Demo data · Verified public alerts only:</strong> Every hazard shown below passed
-          human editorial corroboration. Unverified social media posts, citizen tips awaiting
-          checks, and graphic collision images are withheld from public display.
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="pz-btn-primary"
+            style={{ minHeight: '40px', padding: '0 18px', fontSize: '14px' }}
+            onClick={() => navigatePublic('report')}
+          >
+            + Report a Hazard
+          </button>
+          <button
+            type="button"
+            className="pz-btn-channel-whatsapp"
+            style={{ minHeight: '40px', padding: '0 14px', fontSize: '13.5px' }}
+            onClick={() => setShowWhatsAppModal(true)}
+            title="Open interactive WhatsApp bot demo"
+          >
+            WhatsApp Demo 💬
+          </button>
+          <button
+            type="button"
+            className="pz-btn-channel-ussd"
+            style={{ minHeight: '40px', padding: '0 14px', fontSize: '13.5px' }}
+            onClick={() => setShowUssdModal(true)}
+            title="Open interactive USSD *140# demo"
+          >
+            USSD (*140#) 📟
+          </button>
+        </div>
       </div>
 
       {/* 3-Metric Summary Strip */}
       <section className="pz-public-summary-strip" aria-label="Bulawayo summary metrics">
         <div>
           <div className="pz-summary-metric-value">{approvedAlertsCount}</div>
-          <div style={{ fontSize: '13.5px', color: 'var(--pz-muted)', marginTop: '4px' }}>
-            Approved verified alerts across Bulawayo
+          <div style={{ fontSize: '13px', color: 'var(--pz-muted)', marginTop: '2px' }}>
+            Approved verified alerts in Bulawayo
           </div>
         </div>
 
         <div>
           <div className="pz-summary-metric-value">3</div>
-          <div style={{ fontSize: '13.5px', color: 'var(--pz-muted)', marginTop: '4px' }}>
-            Monitored arterial corridors (A5, Khami Rd, Esigodini Rd)
+          <div style={{ fontSize: '13px', color: 'var(--pz-muted)', marginTop: '2px' }}>
+            Active corridors (A5, Khami Rd, Esigodini Rd)
           </div>
         </div>
 
@@ -544,7 +598,7 @@ export const PublicDashboardView: React.FC = () => {
           >
             {lastEditorialUpdateTime}
           </div>
-          <div style={{ fontSize: '13.5px', color: 'var(--pz-muted)', marginTop: '4px' }}>
+          <div style={{ fontSize: '13px', color: 'var(--pz-muted)', marginTop: '2px' }}>
             {lastEditorialUpdateDateLabel}
           </div>
         </div>
@@ -553,14 +607,43 @@ export const PublicDashboardView: React.FC = () => {
       {/* Filter Pills + Search */}
       {renderFilterBar()}
 
-      {/* Main Split: Left Map + Selected Incident Sheet, Right Verified Road Alerts */}
+      {/* Mobile View Toggle Switch */}
+      <div
+        className="pz-mobile-view-tabs"
+        role="tablist"
+        aria-label="Toggle map or alert list view on mobile"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === 'map'}
+          className={`pz-mobile-tab-btn ${mobileTab === 'map' ? 'is-active' : ''}`}
+          onClick={() => setMobileTab('map')}
+        >
+          🗺️ Map View
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === 'alerts'}
+          className={`pz-mobile-tab-btn ${mobileTab === 'alerts' ? 'is-active' : ''}`}
+          onClick={() => setMobileTab('alerts')}
+        >
+          📋 Verified Alerts ({filteredAlerts.length})
+        </button>
+      </div>
+
+      {/* Main Split: Left 62% Map + Incident Sheet, Right 38% Verified Road Alerts */}
       <div className="pz-public-split">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
+        <div
+          id="pz-public-map-anchor"
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}
+        >
           <PublicBulawayoMap
             alerts={filteredAlerts}
             selectedAlertId={selectedAlertId}
             onSelectAlert={(alert) => setSelectedAlertId(alert.id)}
-            height={520}
+            height={600}
           />
 
           {selectedAlert && renderSelectedAlertSheet(selectedAlert)}
@@ -582,13 +665,13 @@ export const PublicDashboardView: React.FC = () => {
             </span>
           </div>
 
-          {filteredAlerts.length === 0 ? (
-            <div style={{ padding: '16px 0', color: 'var(--pz-muted)', fontSize: '13.5px' }}>
-              No verified hazards match this filter. Try selecting “All” or clearing search.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {filteredAlerts.map((alert) => {
+          <div className="pz-public-alerts-list">
+            {filteredAlerts.length === 0 ? (
+              <div style={{ padding: '16px 0', color: 'var(--pz-muted)', fontSize: '13.5px' }}>
+                No verified hazards match this filter. Try selecting “All” or clearing search.
+              </div>
+            ) : (
+              filteredAlerts.map((alert) => {
                 const isSelected = selectedAlert?.id === alert.id;
                 return (
                   <button
@@ -623,7 +706,7 @@ export const PublicDashboardView: React.FC = () => {
                     </div>
 
                     <div style={{ fontSize: '13px', color: 'var(--pz-muted)' }}>
-                      {alert.location}
+                      {alert.location} · {alert.corridor}
                     </div>
 
                     <div
@@ -636,37 +719,33 @@ export const PublicDashboardView: React.FC = () => {
                         marginTop: '2px',
                       }}
                     >
-                      <span className="pz-badge pz-badge-verified">Verified</span>
+                      <span
+                        className="pz-badge-panzira-verified"
+                        title="Panzira Verified · Independent newsroom check"
+                      >
+                        PANZIRA VERIFIED
+                      </span>
                       <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
                         {alert.updatedAgo}
                       </span>
                     </div>
                   </button>
                 );
-              })}
-            </div>
-          )}
-
-          <div
-            className="pz-notice-box"
-            style={{ marginTop: '8px', borderRadius: '6px', gap: '8px' }}
-          >
-            <div style={{ fontWeight: 600, fontSize: '13.5px' }}>Spotted an unmapped hazard?</div>
-            <p style={{ fontSize: '12.5px', color: 'var(--pz-muted)' }}>
-              Submit a report with or without a photo. Reports go to our Bulawayo verification desk
-              first.
-            </p>
-            <button
-              type="button"
-              className="pz-btn-primary"
-              style={{ width: '100%', minHeight: '42px' }}
-              onClick={() => navigatePublic('report')}
-            >
-              Report a Hazard
-            </button>
+              })
+            )}
           </div>
         </aside>
       </div>
+
+      {/* Multichannel Simulation Modals */}
+      <WhatsAppSimulatorModal
+        isOpen={showWhatsAppModal}
+        onClose={() => setShowWhatsAppModal(false)}
+      />
+      <UssdSimulatorModal
+        isOpen={showUssdModal}
+        onClose={() => setShowUssdModal(false)}
+      />
     </div>
   );
 };

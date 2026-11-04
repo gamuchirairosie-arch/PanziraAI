@@ -119,7 +119,7 @@ const BulawayoNeutralBasemap: React.FC<{ compact?: boolean }> = ({ compact = fal
       </g>
 
       {/* Highway Route Shields (Neutral geographic route identifiers, not incident markers) */}
-      <g fontFamily="Public Sans, system-ui, sans-serif" fontWeight="700" fontSize="11">
+      <g fontFamily="Inter, system-ui, sans-serif" fontWeight="700" fontSize="11">
         <rect x="122" y="446" width="32" height="20" rx="3" fill="#ffffff" stroke="#8a968e" />
         <text x="138" y="460" textAnchor="middle" fill="#2f3b34">
           A5
@@ -138,7 +138,7 @@ const BulawayoNeutralBasemap: React.FC<{ compact?: boolean }> = ({ compact = fal
 
       {/* Suburb, Corridor & City Labels */}
       <g
-        fontFamily="Public Sans, system-ui, sans-serif"
+        fontFamily="Inter, system-ui, sans-serif"
         fill="#536058"
         style={{ pointerEvents: 'none' }}
       >

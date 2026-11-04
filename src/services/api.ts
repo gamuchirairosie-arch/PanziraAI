@@ -12,7 +12,19 @@ import {
 } from '../types';
 import { NewCitizenReportInput } from '../context/PanziraContext';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+  (typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/api'
+    : '/api');
+
+const HEALTH_URL =
+  (import.meta.env.VITE_HEALTH_URL as string | undefined) ||
+  (typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/health'
+    : '/health');
 
 class ApiService {
   private token: string | null = null;
@@ -43,7 +55,7 @@ class ApiService {
 
   async checkHealth(): Promise<boolean> {
     try {
-      const res = await fetch('http://localhost:8000/health', { method: 'GET' });
+      const res = await fetch(HEALTH_URL, { method: 'GET' });
       return res.ok;
     } catch {
       return false;

@@ -175,7 +175,7 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
 
       // Popup
       const popupHtml = `
-        <div style="font-family: 'Public Sans', system-ui, sans-serif; font-size: 12.5px; color: #1c2720; min-width: 200px;">
+        <div style="font-family: 'Inter', system-ui, sans-serif; font-size: 12.5px; color: #1c2720; min-width: 200px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
             <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: ${
               alert.isCritical ? '#b53d38' : '#145438'

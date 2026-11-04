@@ -16,13 +16,15 @@ if str(backend_dir) not in sys.path:
 import uvicorn
 
 if __name__ == "__main__":
-    print(f"[*] Starting Panzira AI Backend Server from: {backend_dir}")
-    print("[*] API Documentation available at: http://127.0.0.1:8000/docs")
-    print("[*] Health endpoint: http://127.0.0.1:8000/health")
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    print(f"[*] Starting Panzira AI Backend Server on {host}:{port} from: {backend_dir}")
+    print(f"[*] API Documentation available at: http://{host if host != '0.0.0.0' else '127.0.0.1'}:{port}/docs")
+    print(f"[*] Health endpoint: http://{host if host != '0.0.0.0' else '127.0.0.1'}:{port}/health")
     uvicorn.run(
         "app.main:app",
-        host="127.0.0.1",
-        port=8000,
-        reload=True,
+        host=host,
+        port=port,
+        reload=False if os.getenv("PRODUCTION") == "true" else True,
         app_dir=str(backend_dir),
     )

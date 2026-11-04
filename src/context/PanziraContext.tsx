@@ -17,8 +17,8 @@ import {
   WorkingBriefDraft,
 } from '../types';
 import {
-  formatReadableDateTime,
-  formatShortTime,
+  formatHarareDateTime,
+  formatHarareShortTime,
   validateObservedDateTime,
 } from '../utils/dateTime';
 import { apiService } from '../services/api';
@@ -330,15 +330,18 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => window.removeEventListener('hashchange', applyHash);
   }, []);
 
-  // Live Python Backend Synchronization
+  // Live Python Backend Synchronization & Periodic Polling
   useEffect(() => {
     let isMounted = true;
-    const initBackend = async () => {
+    const syncBackend = async (isInitial = false) => {
       try {
         const isHealthy = await apiService.checkHealth();
         if (!isHealthy || !isMounted) return;
 
-        await apiService.login();
+        if (!apiService.getToken()) {
+          await apiService.login().catch(() => {});
+        }
+
         const [liveSignals, liveAlerts, liveBrief] = await Promise.all([
           apiService.fetchSignals().catch(() => null),
           apiService.fetchPublicAlerts().catch(() => null),
@@ -346,21 +349,29 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ]);
 
         if (isMounted) {
-          setPersisted((prev) => ({
-            ...prev,
-            signals: liveSignals && liveSignals.length > 0 ? liveSignals : prev.signals,
-            verifiedAlerts: liveAlerts && liveAlerts.length > 0 ? liveAlerts : prev.verifiedAlerts,
-            briefDraft: liveBrief ? liveBrief : prev.briefDraft,
-          }));
-          showToast('Live Python backend connected (SQLite database active).');
+          setPersisted((prev) => {
+            if (!liveSignals || liveSignals.length === 0) return prev;
+            return {
+              ...prev,
+              signals: liveSignals,
+              verifiedAlerts: liveAlerts && liveAlerts.length > 0 ? liveAlerts : prev.verifiedAlerts,
+              briefDraft: liveBrief ? liveBrief : prev.briefDraft,
+            };
+          });
+          if (isInitial) {
+            showToast('Live Python backend connected (SQLite database active).');
+          }
         }
       } catch {
         // Gracefully use local state if backend is offline
       }
     };
-    initBackend();
+
+    syncBackend(true);
+    const interval = setInterval(() => syncBackend(false), 4000);
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 
@@ -392,9 +403,9 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const dateCheck = validateObservedDateTime(input.observedIso || input.reportedDateTime);
     const now = new Date();
     const validDate = dateCheck.valid && dateCheck.date ? dateCheck.date : now;
-    const normalizedReadable = formatReadableDateTime(validDate);
-    const intakeTimeReadable = formatReadableDateTime(now);
-    const tShort = formatShortTime(now);
+    const normalizedReadable = formatHarareDateTime(validDate);
+    const intakeTimeReadable = formatHarareDateTime(now);
+    const tShort = `${formatHarareShortTime(now)} CAT`;
 
     // Ensure unique non-colliding PZ-DEMO-0XXX ID preserving PZ-DEMO-0430, PZ-DEMO-0431, etc.
     const existingDemoNums = persisted.signals
@@ -583,7 +594,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const requestEvidence = (signalId: string, note?: string) => {
     apiService.requestEvidence(signalId, note).catch(() => {});
-    const stamp = formatReadableDateTime(new Date());
+    const stamp = formatHarareDateTime(new Date());
     setPersisted((prev) => ({
       ...prev,
       signals: prev.signals.map((sig) => {
@@ -612,7 +623,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const rejectSignal = (signalId: string, reason?: string) => {
     apiService.rejectSignal(signalId, reason).catch(() => {});
-    const stamp = formatReadableDateTime(new Date());
+    const stamp = formatHarareDateTime(new Date());
     setPersisted((prev) => ({
       ...prev,
       signals: prev.signals.map((sig) => {
@@ -650,8 +661,8 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const approvedNow = new Date();
-    const readableApproval = formatReadableDateTime(approvedNow);
-    const shortApprovalTime = `${formatShortTime(approvedNow)} CAT`;
+    const readableApproval = formatHarareDateTime(approvedNow);
+    const shortApprovalTime = `${formatHarareShortTime(approvedNow)} CAT`;
 
     apiService.verifySignal(signalId).catch(() => {});
 
@@ -754,7 +765,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const saveBriefDraft = () => {
-    const stamp = formatReadableDateTime(new Date());
+    const stamp = formatHarareDateTime(new Date());
     apiService.saveWorkingBrief(persisted.briefDraft).catch(() => {});
     setPersisted((prev) => ({
       ...prev,

@@ -2,6 +2,8 @@ import React from 'react';
 import 'leaflet/dist/leaflet.css';
 import { AppShell } from './components/AppShell';
 import { PanziraProvider, usePanzira } from './context/PanziraContext';
+import { CardFocusProvider } from './context/CardFocusContext';
+import { GlobalCardFocusModal } from './components/GlobalCardFocusModal';
 import {
   FleetCorridorDeskView,
   HotspotIntelligenceView,
@@ -46,9 +48,12 @@ const ActiveRouteRenderer: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <PanziraProvider>
-      <AppShell>
-        <ActiveRouteRenderer />
-      </AppShell>
+      <CardFocusProvider>
+        <AppShell>
+          <ActiveRouteRenderer />
+        </AppShell>
+        <GlobalCardFocusModal />
+      </CardFocusProvider>
     </PanziraProvider>
   );
 };

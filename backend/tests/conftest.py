@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from PIL import Image  # noqa: E402
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
+from app.database.session import Base as DbBase  # noqa: E402
 from app.integrations.messenger import Messenger, set_messenger  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Role, User  # noqa: E402
@@ -32,10 +33,18 @@ class CaptureMessenger(Messenger):
         return "captured"
 
 
-@pytest.fixture(autouse=True)
+import sqlalchemy as sa
+
+@pytest.fixture
 def fresh():
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    with engine.connect() as conn:
+        conn.execute(sa.text("PRAGMA foreign_keys=OFF"))
+        Base.metadata.drop_all(conn)
+        DbBase.metadata.drop_all(conn)
+        Base.metadata.create_all(conn)
+        DbBase.metadata.create_all(conn)
+        conn.execute(sa.text("PRAGMA foreign_keys=ON"))
+        conn.commit()
     limiter.reset()
     cap = CaptureMessenger()
     set_messenger(cap)
@@ -52,7 +61,7 @@ def fresh():
 
 
 @pytest.fixture
-def client():
+def client(fresh):
     with TestClient(app) as c:
         yield c
 

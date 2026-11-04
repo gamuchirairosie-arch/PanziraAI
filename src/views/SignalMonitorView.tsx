@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { EvidencePhotoFrame } from '../components/CroppedFigmaMedia';
 import { usePanzira } from '../context/PanziraContext';
+import { useCardFocus } from '../context/CardFocusContext';
 
 type MonitorFilter = 'all' | 'public' | 'opt-in';
 
@@ -20,6 +21,8 @@ export const SignalMonitorView: React.FC = () => {
     revealedGraphicIds,
     toggleGraphicReveal,
   } = usePanzira();
+
+  const { focusCard } = useCardFocus();
 
   const [visibilityFilter, setVisibilityFilter] = useState<MonitorFilter>('all');
 
@@ -59,33 +62,6 @@ export const SignalMonitorView: React.FC = () => {
   const colorClass = (c: 'green' | 'gold' | 'red') =>
     c === 'green' ? 'pz-color-green' : c === 'red' ? 'pz-color-red' : 'pz-color-gold';
 
-  const pipelineSteps = [
-    {
-      num: '01',
-      stage: 1,
-      title: 'Received',
-      desc: 'Captured with source channel and intake timestamp',
-    },
-    {
-      num: '02',
-      stage: 2,
-      title: 'AI extracted',
-      desc: 'Draft translation, category suggestion, and deduplication',
-    },
-    {
-      num: '03',
-      stage: 3,
-      title: 'Corroboration',
-      desc: 'Requires independent evidence and exact landmark check',
-    },
-    {
-      num: '04',
-      stage: 4,
-      title: 'Editor gate',
-      desc: 'Only a human editor can verify or publish a warning',
-    },
-  ] as const;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       {/* Page Title */}
@@ -99,23 +75,68 @@ export const SignalMonitorView: React.FC = () => {
 
       {/* 4 Metric Cards */}
       <section className="pz-metrics-grid-4" aria-label="Signal monitor summary metrics">
-        <div className="pz-metric-card">
-          <span className="pz-metric-value">
-            {String(totalSignalsCount).padStart(2, '0')}
-          </span>
+        <button
+          type="button"
+          className="pz-metric-card pz-expandable-card"
+          style={{ textAlign: 'left', cursor: 'pointer' }}
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Signals Received in Intake',
+              subtitle: 'All monitored incoming public feeds, authorized posts, and citizen reports',
+              categoryLabel: 'MONITORING METRIC',
+              metricValue: String(totalSignalsCount).padStart(2, '0'),
+              metricDescription: `${publicSignalsCount} public feed items • ${optInSignalsCount} citizen opt-in submissions`,
+              description:
+                'Total number of incoming road safety leads structured for journalistic inspection across Bulawayo arterial corridors. Includes both authorized public feeds and direct citizen submissions.',
+              metadata: [
+                { label: 'Public Feed Leads', value: `${publicSignalsCount} items` },
+                { label: 'Citizen Opt-in Tips', value: `${optInSignalsCount} items` },
+                { label: 'Corridors Monitored', value: 'Harare Rd (A5), Khami Rd, Esigodini Rd' },
+                { label: 'Autonomous AI Publishing', value: 'Disabled (Human gate required)', color: 'var(--pz-primary-green)' },
+              ],
+              actions: [
+                { label: 'Open Signal Inbox →', onClick: () => navigateNewsroom('inbox'), variant: 'primary' },
+              ],
+            })
+          }
+          title="Click to view metric details"
+        >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
+          <span className="pz-metric-value">{String(totalSignalsCount).padStart(2, '0')}</span>
           <span className="pz-metric-label">Signals received</span>
           <span style={{ fontSize: '12.5px', color: 'var(--pz-muted)' }}>
             {publicSignalsCount} public • {optInSignalsCount} opt-in
           </span>
-        </div>
+        </button>
 
         <button
           type="button"
-          className="pz-metric-card"
+          className="pz-metric-card pz-expandable-card"
           style={{ textAlign: 'left', cursor: 'pointer' }}
-          onClick={() => navigateNewsroom('inbox')}
-          title="Open Journalist Signal Inbox"
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Awaiting Editorial Corroboration',
+              subtitle: 'Unverified hazard leads currently queued for independent verification',
+              categoryLabel: 'EDITORIAL QUEUE',
+              metricValue: String(awaitingReviewCount).padStart(2, '0'),
+              metricDescription: 'Submissions held until all 4 verification criteria are satisfied',
+              description:
+                'These signals contain reported collisions, road surface damages, or flooding that have not yet achieved independent confirmation. Journalists must cross-reference at least one separate eyewitness, municipal log, or field reporter before publication.',
+              metadata: [
+                { label: '4-Point Check Status', value: 'In Progress' },
+                { label: 'Graphic Content Safety', value: 'Restricted from public display' },
+                { label: 'Vernacular Translation', value: 'English drafts prepared for Shona/Ndebele tips' },
+              ],
+              actions: [
+                { label: 'Open Signal Inbox Queue →', onClick: () => navigateNewsroom('inbox'), variant: 'primary' },
+              ],
+            })
+          }
+          title="Click to view awaiting review details"
         >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value" style={{ color: 'var(--pz-amber-text)' }}>
             {String(awaitingReviewCount).padStart(2, '0')}
           </span>
@@ -127,11 +148,31 @@ export const SignalMonitorView: React.FC = () => {
 
         <button
           type="button"
-          className="pz-metric-card"
+          className="pz-metric-card pz-expandable-card"
           style={{ textAlign: 'left', cursor: 'pointer' }}
-          onClick={() => navigateNewsroom('hotspots')}
-          title="View Hotspot Intelligence"
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Possible Corridor Patterns',
+              subtitle: 'Clustered hazard reports along monitored Bulawayo transit routes',
+              categoryLabel: 'HOTSPOT SCREENING',
+              metricValue: '03',
+              metricDescription: 'Harare Road (A5), Khami Road, Esigodini Road',
+              description:
+                'Corridor screening scores derived from clustered citizen reports. These patterns serve as investigative leads for newsroom field teams and transport dispatchers, rather than automated crash forecasts.',
+              metadata: [
+                { label: 'Corridor 1', value: 'Harare Road (A5) · High Priority Watch' },
+                { label: 'Corridor 2', value: 'Khami Road · Moderate Priority Watch' },
+                { label: 'Corridor 3', value: 'Esigodini Road · Moderate Priority Watch' },
+              ],
+              actions: [
+                { label: 'Open Hotspot Intelligence →', onClick: () => navigateNewsroom('hotspots'), variant: 'primary' },
+              ],
+            })
+          }
+          title="Click to view corridor pattern intelligence"
         >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value">03</span>
           <span className="pz-metric-label">Possible corridor patterns</span>
           <span style={{ fontSize: '12.5px', color: 'var(--pz-muted)' }}>
@@ -139,7 +180,30 @@ export const SignalMonitorView: React.FC = () => {
           </span>
         </button>
 
-        <div className="pz-metric-card">
+        <button
+          type="button"
+          className="pz-metric-card pz-expandable-card"
+          style={{ textAlign: 'left', cursor: 'pointer' }}
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Zero Autonomous AI Publications',
+              subtitle: 'Strict safety invariant: AI cannot publish road safety alerts directly',
+              categoryLabel: 'EDITORIAL SAFEGUARD',
+              metricValue: String(autoPublishedByAiCount).padStart(2, '0'),
+              metricDescription: '100% human editor sign-off enforced',
+              description:
+                'Panzira AI adheres to an uncompromised human-in-the-loop architecture. While AI models generate candidate categories, geo-corridor suggestions, and translations, public safety alerts cannot reach the live map without an accredited editor signing off on all 4 corroboration points.',
+              metadata: [
+                { label: 'Autonomous Releases', value: '0 (Strictly Blocked)', color: 'var(--pz-primary-green)' },
+                { label: 'Editor Verification Gate', value: 'Mandatory 4-Point Corroboration' },
+                { label: 'Accountability Audit', value: 'Logged with Africa/Harare timestamp & editor ID' },
+              ],
+            })
+          }
+          title="Click to view AI publishing safeguard details"
+        >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value">
             {String(autoPublishedByAiCount).padStart(2, '0')}
           </span>
@@ -147,23 +211,10 @@ export const SignalMonitorView: React.FC = () => {
           <span style={{ fontSize: '12.5px', color: 'var(--pz-primary-green)', fontWeight: 600 }}>
             Human gate required
           </span>
-        </div>
+        </button>
       </section>
 
-      {/* Verification & Source Provenance Notice */}
-      <div className="pz-notice-box" style={{ borderRadius: '6px' }}>
-        <p style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--pz-text)' }}>
-          Demo data · All posts begin as unverified leads
-        </p>
-        <p style={{ fontSize: '13px', color: 'var(--pz-muted)' }}>
-          Publicly shared Facebook/Instagram links, authorized pages and user-submitted
-          WhatsApp/web reports are structured to assist journalists, then held for human
-          verification. Private WhatsApp groups are never scraped; no live social feeds or scraping
-          services are connected in this demo.
-        </p>
-      </div>
-
-      {/* 3-Column Triage Workspace */}
+      {/* 3-Column Triage Workspace: Left Signals Queue, Right Unified Inspection Workbench */}
       <div className="pz-triage-grid">
         {/* =================================================================
             COLUMN 01: INCOMING SIGNALS
@@ -236,10 +287,28 @@ export const SignalMonitorView: React.FC = () => {
                   <button
                     key={sig.id}
                     type="button"
-                    className={`pz-signal-card ${isSelected ? 'is-selected' : ''}`}
-                    onClick={() => setSelectedMonitorId(sig.id)}
+                    className={`pz-signal-card pz-expandable-card ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setSelectedMonitorId(sig.id);
+                      focusCard({
+                        type: 'signal',
+                        signalId: sig.id,
+                        title: sig.title,
+                        subtitle: sig.subtitle,
+                        categoryLabel: 'INCOMING SIGNAL LEAD',
+                        badge: sig.monitorStatusLabel,
+                        badgeColor:
+                          sig.monitorStatusColor === 'green'
+                            ? 'green'
+                            : sig.monitorStatusColor === 'red'
+                              ? 'red'
+                              : 'amber',
+                      });
+                    }}
                     aria-pressed={isSelected}
+                    title="Click to select and view full expanded card"
                   >
+                    <span className="pz-expand-hint-pill">Expand ⤢</span>
                     <div className="pz-signal-meta-row">
                       <span
                         className={`pz-source-tag ${
@@ -281,7 +350,7 @@ export const SignalMonitorView: React.FC = () => {
         </section>
 
         {/* =================================================================
-            COLUMN 02 & 03: SELECTED SIGNAL OR EMPTY FILTER STATE
+            COLUMN 02 & 03: UNIFIED INSPECTION WORKBENCH (CLEAR & UNCLUTTERED)
             ================================================================= */}
         {!selectedSignal ? (
           <section
@@ -291,154 +360,136 @@ export const SignalMonitorView: React.FC = () => {
           >
             <h2 className="pz-subsection-heading">No matching signal to display</h2>
             <p style={{ fontSize: '14px', color: 'var(--pz-muted)' }}>
-              Adjust the intake channel filter or clear the search input to inspect incoming
-              submissions.
+              Adjust the intake channel filter or clear search to inspect incoming submissions.
             </p>
           </section>
         ) : (
-          <>
-            {/* COLUMN 02: SELECTED SIGNAL */}
-            <section className="pz-triage-col" aria-label="Selected signal details">
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  minHeight: '34px',
-                }}
-              >
-                <h2 className="pz-subsection-heading">Selected signal</h2>
-                <span className="pz-badge pz-badge-neutral">{selectedSignal.id}</span>
-              </div>
-
-              {/* Raw Message + Optional Shona/Ndebele Draft Translation */}
-              <div className="pz-raw-message-card">
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '8px',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <span className="pz-field-label" style={{ color: 'var(--pz-primary-green)' }}>
-                    Original message · {selectedSignal.originalLanguage}
-                  </span>
+          <section
+            style={{
+              gridColumn: 'span 2',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}
+            aria-label="Selected signal inspection workbench"
+          >
+            {/* Header & Quick Actions Banner */}
+            <div
+              className="pz-card-panel"
+              style={{
+                padding: '18px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: '16px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="pz-badge pz-badge-neutral">{selectedSignal.id}</span>
+                  <span className="pz-badge pz-badge-neutral">{selectedSignal.sourceChannelLabel}</span>
                   <span
                     className={`pz-badge ${
-                      selectedSignal.visibility === 'opt-in'
+                      selectedSignal.workflowStatus === 'verified'
                         ? 'pz-badge-verified'
-                        : 'pz-badge-amber'
+                        : selectedSignal.workflowStatus === 'rejected'
+                          ? 'pz-badge-critical'
+                          : 'pz-badge-amber'
                     }`}
                   >
-                    {selectedSignal.visibility === 'opt-in'
-                      ? 'Opt-in submission'
-                      : 'Public / authorized source'}
+                    {selectedSignal.workflowStatus === 'verified'
+                      ? 'Verified & Approved'
+                      : selectedSignal.workflowStatus === 'rejected'
+                        ? 'Archived'
+                        : 'Unverified Lead'}
                   </span>
                 </div>
 
-                <p className="pz-raw-quote">{selectedSignal.originalQuote}</p>
-
-                {selectedSignal.draftEnglishTranslation && (
-                  <div className="pz-translation-box">
-                    <span className="pz-field-label" style={{ color: 'var(--pz-demo-text)' }}>
-                      Draft English translation · Human review required
-                    </span>
-                    <p style={{ fontSize: '13.5px', color: 'var(--pz-text)', fontStyle: 'italic' }}>
-                      {selectedSignal.draftEnglishTranslation}
-                    </p>
-                  </div>
-                )}
-
-                <p style={{ fontSize: '12.5px', color: 'var(--pz-muted)' }}>
-                  {selectedSignal.sourceProvenanceNote}
+                <h2 className="pz-card-title" style={{ fontSize: '20px', margin: 0 }}>
+                  {selectedSignal.title}
+                </h2>
+                <p style={{ fontSize: '13.5px', color: 'var(--pz-muted)', margin: 0 }}>
+                  {selectedSignal.corridor} · {selectedSignal.landmark} · Reported {selectedSignal.reportedDateTime}
                 </p>
-
-                {selectedSignal.evidenceLink && (
-                  <p
-                    style={{
-                      fontSize: '12.5px',
-                      color: 'var(--pz-primary-green)',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    Submitted reference URL: {selectedSignal.evidenceLink}
-                  </p>
-                )}
               </div>
 
-              {/* AI-Structured Evidence Panel */}
-              <div className="pz-card-panel">
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '8px',
-                    flexWrap: 'wrap',
-                  }}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="pz-btn-secondary"
+                  style={{ minHeight: '38px', fontSize: '13px' }}
+                  onClick={() => navigateNewsroom('inbox', selectedSignal.id)}
                 >
-                  <h3 className="pz-card-title">AI-structured evidence</h3>
-                  <span className="pz-badge pz-badge-amber">Suggestions, not proof</span>
-                </div>
-
-                <div className="pz-divider" />
-
-                <div>
-                  <div className="pz-field-label">Hazard type</div>
-                  <div className="pz-field-value">{selectedSignal.aiHazardType}</div>
-                </div>
-
-                <div>
-                  <div className="pz-field-label">Likely corridor</div>
-                  <div className="pz-field-value">{selectedSignal.aiLikelyCorridor}</div>
-                </div>
-
-                <div>
-                  <div className="pz-field-label">Language</div>
-                  <div className="pz-field-value">{selectedSignal.aiLanguageNote}</div>
-                </div>
-
-                <div>
-                  <div className="pz-field-label">Location precision</div>
-                  <div className="pz-field-value" style={{ color: 'var(--pz-amber-text)' }}>
-                    {selectedSignal.aiLocationPrecision}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="pz-field-label">Intake confidence</div>
-                  <div
-                    className="pz-field-value"
-                    style={{
-                      color:
-                        selectedSignal.workflowStatus === 'verified'
-                          ? 'var(--pz-primary-green)'
-                          : 'var(--pz-amber-text)',
-                    }}
-                  >
-                    {selectedSignal.workflowStatus === 'verified'
-                      ? 'Verified by human editor (4/4 checks complete)'
-                      : selectedSignal.aiConfidenceNote}
-                  </div>
-                </div>
+                  View in Inbox →
+                </button>
+                <button
+                  type="button"
+                  className="pz-btn-primary"
+                  style={{ minHeight: '38px', fontSize: '13.5px' }}
+                  onClick={() => navigateNewsroom('verify', selectedSignal.id)}
+                >
+                  Open Verification Checklist →
+                </button>
               </div>
+            </div>
 
-              {/* Image Analysis / Graphic Safety Preview Card */}
-              <div className="pz-cream-panel">
-                <span className="pz-field-label" style={{ color: 'var(--pz-amber-text)' }}>
-                  Image analysis · When a photo is submitted
-                </span>
-                <div style={{ fontWeight: 600, fontSize: '14.5px', color: 'var(--pz-text)' }}>
-                  {selectedSignal.aiImageHeading}
+            {/* 2-Column Split: Left Citizen Evidence, Right AI Triage & Verification Gaps */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '14px' }}>
+              {/* Left Column: Citizen Evidence & Translation */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div
+                  className="pz-raw-message-card pz-expandable-card"
+                  onClick={() =>
+                    focusCard({
+                      type: 'signal',
+                      signalId: selectedSignal.id,
+                      title: selectedSignal.title,
+                      categoryLabel: 'ORIGINAL CITIZEN MESSAGE',
+                    })
+                  }
+                  title="Click to expand message"
+                >
+                  <span className="pz-expand-hint-pill">Expand ⤢</span>
+                  <div className="pz-field-label" style={{ color: 'var(--pz-primary-green)' }}>
+                    Original message · {selectedSignal.originalLanguage}
+                  </div>
+                  <p className="pz-raw-quote" style={{ fontSize: '14.5px', margin: '8px 0' }}>
+                    "{selectedSignal.originalQuote}"
+                  </p>
+
+                  {selectedSignal.draftEnglishTranslation && (
+                    <div className="pz-translation-box" style={{ marginTop: '10px' }}>
+                      <span className="pz-field-label" style={{ color: 'var(--pz-demo-text)' }}>
+                        Draft English translation (review nuance)
+                      </span>
+                      <p style={{ fontSize: '13.5px', color: 'var(--pz-text)', fontStyle: 'italic', margin: '4px 0 0' }}>
+                        {selectedSignal.draftEnglishTranslation}
+                      </p>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '12px', color: 'var(--pz-muted)', marginTop: '8px' }}>
+                    {selectedSignal.sourceProvenanceNote}
+                  </div>
                 </div>
-                <p style={{ fontSize: '13px', color: 'var(--pz-muted)' }}>
-                  {selectedSignal.aiImageSummary}
-                </p>
 
+                {/* Photo Evidence if attached */}
                 {selectedSignal.photoType !== 'none' && (
-                  <div style={{ marginTop: '4px' }}>
+                  <div
+                    className="pz-card-panel pz-expandable-card"
+                    onClick={() =>
+                      focusCard({
+                        type: 'signal',
+                        signalId: selectedSignal.id,
+                        title: `Visual Evidence · ${selectedSignal.id}`,
+                        categoryLabel: 'VISUAL EVIDENCE',
+                      })
+                    }
+                    title="Click to expand image evidence"
+                  >
+                    <span className="pz-expand-hint-pill">Expand ⤢</span>
+                    <div className="pz-field-label">Submitted photo evidence</div>
                     <EvidencePhotoFrame
                       photoType={selectedSignal.photoType}
                       customPhotoDataUrl={selectedSignal.customPhotoDataUrl}
@@ -446,147 +497,106 @@ export const SignalMonitorView: React.FC = () => {
                       isRevealed={Boolean(revealedGraphicIds[selectedSignal.id])}
                       onToggleReveal={() => toggleGraphicReveal(selectedSignal.id)}
                       graphicReason={selectedSignal.graphicSafetyReason}
-                      height={168}
+                      height={180}
                       allowEditorReveal={true}
                     />
+                    {selectedSignal.photoCaption && (
+                      <p style={{ fontSize: '12px', color: 'var(--pz-muted)', marginTop: '6px' }}>
+                        {selectedSignal.photoCaption}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
-            </section>
 
-            {/* COLUMN 03: REVIEW PIPELINE & EDITORIAL GATE */}
-            <section className="pz-triage-col" aria-label="Editorial review pipeline">
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  minHeight: '34px',
-                }}
-              >
-                <h2 className="pz-subsection-heading">Review pipeline</h2>
-                <span
-                  className={`pz-badge ${
-                    selectedSignal.workflowStatus === 'verified'
-                      ? 'pz-badge-verified'
-                      : selectedSignal.workflowStatus === 'rejected'
-                        ? 'pz-badge-critical'
-                        : 'pz-badge-amber'
-                  }`}
+              {/* Right Column: AI Pre-Triage & Missing Gaps */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* AI Structured Summary */}
+                <div
+                  className="pz-card-panel pz-expandable-card"
+                  onClick={() =>
+                    focusCard({
+                      type: 'ai-evidence',
+                      signalId: selectedSignal.id,
+                      title: `AI Pre-Triage · ${selectedSignal.id}`,
+                      categoryLabel: 'AI EXTRACTIONS',
+                    })
+                  }
+                  title="Click to expand AI triage details"
                 >
-                  {selectedSignal.workflowStatus === 'verified'
-                    ? 'Approved'
-                    : selectedSignal.workflowStatus === 'rejected'
-                      ? 'Archived'
-                      : 'Held at gate'}
-                </span>
-              </div>
+                  <span className="pz-expand-hint-pill">Expand ⤢</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 className="pz-card-title" style={{ fontSize: '15px' }}>AI Pre-Triage Analysis</h3>
+                    <span className="pz-badge pz-badge-amber">Suggestions, not proof</span>
+                  </div>
 
-              <div className="pz-card-panel" style={{ gap: '14px' }}>
-                {pipelineSteps.map((step) => {
-                  const isVerified = selectedSignal.workflowStatus === 'verified';
-                  const isDone = isVerified || step.stage < selectedSignal.pipelineStage;
-                  const isCurrent = !isVerified && step.stage === selectedSignal.pipelineStage;
-
-                  return (
-                    <div key={step.num} className="pz-pipeline-step">
-                      <div
-                        className={`pz-pipeline-index ${
-                          isDone ? 'is-done' : isCurrent ? 'is-current' : ''
-                        }`}
-                      >
-                        {isDone ? '✓' : step.num}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="pz-field-label">Suggested Hazard:</span>
+                      <span style={{ fontSize: '13.5px', fontWeight: 600 }}>{selectedSignal.aiHazardType}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="pz-field-label">Corridor Match:</span>
+                      <span style={{ fontSize: '13.5px', fontWeight: 600 }}>{selectedSignal.aiLikelyCorridor}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="pz-field-label">Precision:</span>
+                      <span style={{ fontSize: '13.5px', color: 'var(--pz-amber-text)', fontWeight: 500 }}>
+                        {selectedSignal.aiLocationPrecision}
+                      </span>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
+                        <span className="pz-field-label">Intake Confidence:</span>
+                        <span>{selectedSignal.aiConfidenceNote}</span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span
-                          style={{
-                            fontSize: '13.5px',
-                            fontWeight: 600,
-                            color: isDone
-                              ? 'var(--pz-primary-green)'
-                              : isCurrent
-                                ? 'var(--pz-amber-text)'
-                                : 'var(--pz-text)',
-                          }}
-                        >
-                          {step.title}
-                        </span>
-                        <span style={{ fontSize: '12.5px', color: 'var(--pz-muted)' }}>
-                          {step.desc}
-                        </span>
+                      <div style={{ height: '6px', background: 'var(--pz-pale)', borderRadius: '3px', marginTop: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${selectedSignal.aiConfidencePercent}%`, height: '100%', background: 'var(--pz-gold)' }} />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                </div>
 
-              {/* Missing Corroboration Requirements */}
-              {selectedSignal.workflowStatus === 'verified' ? (
-                <div
-                  className="pz-card-panel"
-                  style={{
-                    background: 'var(--pz-active-surface)',
-                    borderColor: 'var(--pz-primary-green)',
-                  }}
-                >
+                {/* Missing Requirements Panel */}
+                {selectedSignal.workflowStatus === 'verified' ? (
                   <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: '14.5px',
-                      color: 'var(--pz-primary-green)',
-                    }}
+                    className="pz-card-panel"
+                    style={{ background: 'var(--pz-active-surface)', borderColor: 'var(--pz-primary-green)' }}
                   >
-                    All 4 editorial verification checks completed
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--pz-primary-green)' }}>
+                      All 4 Verification Checks Completed
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--pz-text)', margin: '4px 0 0' }}>
+                      Approved by Editor Rudo Moyo and broadcast to the public map.
+                    </p>
                   </div>
-                  <p style={{ fontSize: '13px', color: 'var(--pz-text)' }}>
-                    Approved by Editor Rudo Moyo and published to the Bulawayo Public Dashboard
-                    {selectedSignal.isGraphicImage
-                      ? ' (graphic attachment permanently withheld from public view).'
-                      : '.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="pz-missing-panel">
-                  <div style={{ fontWeight: 600, fontSize: '14.5px', color: 'var(--pz-red)' }}>
-                    What is still missing?
-                  </div>
-                  <ul
-                    style={{
-                      margin: 0,
-                      paddingLeft: '18px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                      fontSize: '13px',
-                      color: 'var(--pz-text)',
-                    }}
+                ) : (
+                  <div
+                    className="pz-missing-panel pz-expandable-card"
+                    onClick={() =>
+                      focusCard({
+                        type: 'missing-info',
+                        signalId: selectedSignal.id,
+                        title: `Evidence Gaps · ${selectedSignal.id}`,
+                        categoryLabel: 'MISSING REQUIREMENTS',
+                      })
+                    }
+                    title="Click to view evidence gaps"
                   >
-                    {selectedSignal.missingItems.map((item, idx) => (
-                      <li key={idx}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="pz-cta-full-green"
-                onClick={() => navigateNewsroom('inbox', selectedSignal.id)}
-              >
-                <span>Open journalist inbox</span>
-                <span aria-hidden="true">→</span>
-              </button>
-
-              <button
-                type="button"
-                className="pz-btn-secondary"
-                style={{ width: '100%' }}
-                onClick={() => navigateNewsroom('verify', selectedSignal.id)}
-              >
-                Open verification checklist ({selectedSignal.id}) →
-              </button>
-            </section>
-          </>
+                    <span className="pz-expand-hint-pill">Expand ⤢</span>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--pz-red)' }}>
+                      What is missing before publishing?
+                    </div>
+                    <ul style={{ margin: '8px 0 0 18px', padding: 0, display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px' }}>
+                      {selectedSignal.missingItems.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         )}
       </div>
     </div>

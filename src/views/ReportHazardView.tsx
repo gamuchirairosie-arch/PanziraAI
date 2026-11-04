@@ -73,6 +73,7 @@ export const ReportHazardView: React.FC = () => {
 
   const [consentChecked, setConsentChecked] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submittedReceipt, setSubmittedReceipt] = useState<SignalReport | null>(null);
 
   const selectedCategoryObj =
@@ -155,6 +156,7 @@ export const ReportHazardView: React.FC = () => {
 
   const handleFinalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     const dateCheck = validateObservedDateTime(observedDateTimeInput);
     if (!dateCheck.valid || !dateCheck.normalizedReadable) {
@@ -172,26 +174,31 @@ export const ReportHazardView: React.FC = () => {
       return;
     }
     setValidationError(null);
+    setIsSubmitting(true);
 
-    const created = submitCitizenReport({
-      categoryKey,
-      categoryLabel: selectedCategoryObj.label,
-      roadArea: roadArea.trim(),
-      landmark: landmark.trim(),
-      description: description.trim(),
-      reportedDateTime: dateCheck.normalizedReadable,
-      observedIso: dateCheck.isoString,
-      evidenceLink: evidenceLink.trim() || undefined,
-      language,
-      photoType,
-      customPhotoDataUrl,
-      photoFilename,
-      containsGraphicContent,
-    });
+    try {
+      const created = submitCitizenReport({
+        categoryKey,
+        categoryLabel: selectedCategoryObj.label,
+        roadArea: roadArea.trim(),
+        landmark: landmark.trim(),
+        description: description.trim(),
+        reportedDateTime: dateCheck.normalizedReadable,
+        observedIso: dateCheck.isoString,
+        evidenceLink: evidenceLink.trim() || undefined,
+        language,
+        photoType,
+        customPhotoDataUrl,
+        photoFilename,
+        containsGraphicContent,
+      });
 
-    setSubmittedReceipt(created);
-    setStep(4);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+      setSubmittedReceipt(created);
+      setStep(4);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // =========================================================================
@@ -709,9 +716,8 @@ export const ReportHazardView: React.FC = () => {
 
                   <button
                     type="button"
-                    className={`pz-btn-tonal ${
-                      photoType === 'figma-road-damage' ? 'is-active' : ''
-                    }`}
+                    className={`pz-btn-tonal ${photoType === 'figma-road-damage' ? 'is-active' : ''
+                      }`}
                     style={{ minHeight: '40px', fontSize: '13px' }}
                     onClick={() => {
                       setPhotoType('figma-road-damage');
@@ -809,11 +815,10 @@ export const ReportHazardView: React.FC = () => {
                   <strong>Attachment:</strong>{' '}
                   {photoType === 'none'
                     ? 'None (low-bandwidth text report)'
-                    : `${photoFilename || 'Attached photo'}${
-                        containsGraphicContent || categoryKey === 'collisions'
-                          ? ' (flagged as restricted — hidden on public views)'
-                          : ''
-                      }`}
+                    : `${photoFilename || 'Attached photo'}${containsGraphicContent || categoryKey === 'collisions'
+                      ? ' (flagged as restricted — hidden on public views)'
+                      : ''
+                    }`}
                 </div>
               </div>
 
@@ -858,8 +863,8 @@ export const ReportHazardView: React.FC = () => {
                 >
                   ← Edit details
                 </button>
-                <button type="submit" className="pz-btn-primary">
-                  Submit demo report for verification
+                <button type="submit" className="pz-btn-primary" disabled={isSubmitting}>
+                  {isSubmitting ? 'Submitting report...' : 'Submit demo report for verification'}
                 </button>
               </div>
             </>

@@ -71,7 +71,7 @@ def test_four_eyes_rule(client, editor, monkeypatch):
     assert client.post(f"/api/v1/signals/{ref}/verify", headers=editor).status_code == 409
 
 
-def test_system_actor_can_never_publish():
+def test_system_actor_can_never_publish(fresh):
     from fastapi import HTTPException
     import pytest
     from app import workflow

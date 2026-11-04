@@ -14,28 +14,40 @@ from app.auth.security import hash_password
 def seed_database(db: Session):
     """Populates baseline data if the database is currently unseeded."""
     # 1. Seed Users
-    if db.query(User).count() == 0:
+    if not db.query(User).filter(User.email == "rudo.moyo@panzira.org").first():
         users = [
             User(
                 email="rudo.moyo@panzira.org",
                 hashed_password=hash_password("panzira_editor_2025"),
+                password_hash=hash_password("panzira_editor_2025"),
                 full_name="Rudo Moyo",
+                name="Rudo Moyo",
                 role="editor",
+                can_view_graphic=True,
                 is_active=True,
+                active=True,
             ),
             User(
                 email="tinashe.ndlovu@panzira.org",
                 hashed_password=hash_password("panzira_journalist_2025"),
+                password_hash=hash_password("panzira_journalist_2025"),
                 full_name="Tinashe Ndlovu",
+                name="Tinashe Ndlovu",
                 role="journalist",
+                can_view_graphic=False,
                 is_active=True,
+                active=True,
             ),
             User(
                 email="admin@panzira.org",
                 hashed_password=hash_password("panzira_admin_2025"),
+                password_hash=hash_password("panzira_admin_2025"),
                 full_name="Panzira System Admin",
+                name="Panzira System Admin",
                 role="admin",
+                can_view_graphic=False,
                 is_active=True,
+                active=True,
             )
         ]
         db.add_all(users)

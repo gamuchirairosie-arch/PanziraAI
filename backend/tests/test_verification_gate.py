@@ -24,6 +24,12 @@ class TestVerificationGate(unittest.TestCase):
         db.close()
         cls.client = TestClient(app)
 
+    def setUp(self):
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        seed_database(db)
+        db.close()
+
     def login_user(self, email: str, password: str) -> str:
         res = self.client.post("/api/auth/login", json={"email": email, "password": password})
         self.assertEqual(res.status_code, 200)

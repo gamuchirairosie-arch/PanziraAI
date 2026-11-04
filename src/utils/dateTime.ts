@@ -22,6 +22,8 @@ export interface DateTimeValidationResult {
   error?: string;
 }
 
+export const HARARE_TIMEZONE = 'Africa/Harare';
+
 /**
  * Formats a Date into `YYYY-MM-DDTHH:mm` in local browser time for `<input type="datetime-local">`.
  */
@@ -32,6 +34,90 @@ export function toLocalDateTimeInputValue(date: Date = new Date()): string {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
+ * Formats a Date / timestamp into Africa/Harare time: `D MMM YYYY, HH:mm CAT`
+ */
+export function formatHarareDateTime(
+  dateInput: Date | string | number | null | undefined,
+  includeTimezoneSuffix: boolean = true
+): string {
+  if (!dateInput) return '—';
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: HARARE_TIMEZONE,
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+
+    const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    const day = getPart('day');
+    const month = getPart('month');
+    const year = getPart('year');
+    const hour = getPart('hour');
+    const minute = getPart('minute');
+
+    const base = `${day} ${month} ${year}, ${hour}:${minute}`;
+    return includeTimezoneSuffix ? `${base} CAT` : base;
+  } catch {
+    return formatReadableDateTime(d);
+  }
+}
+
+/**
+ * Formats short time in Africa/Harare time: `HH:mm`
+ */
+export function formatHarareShortTime(
+  dateInput: Date | string | number | null | undefined
+): string {
+  if (!dateInput) return '—';
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: HARARE_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d);
+  } catch {
+    return formatShortTime(d);
+  }
+}
+
+/**
+ * Generates an accurate relative time string (e.g., 'Just now', '12m ago', '3h ago', '2d ago')
+ * from an actual timestamp compared against referenceNow.
+ */
+export function formatRelativeTime(
+  dateInput: Date | string | number | null | undefined,
+  referenceNow: Date = new Date()
+): string {
+  if (!dateInput) return 'Recently';
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return 'Recently';
+
+  const diffMs = referenceNow.getTime() - d.getTime();
+  if (diffMs < 0) return 'Just now';
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 45) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return formatHarareDateTime(d, false);
 }
 
 /**

@@ -64,6 +64,19 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   return (
     <div className="pz-app">
+      {/* Demonstration Banner */}
+      <aside className="pz-demo-banner" role="status" aria-label="Demonstration environment notice">
+        <div className="pz-demo-banner-content">
+          <strong>Demonstration Scenario</strong>
+          <span>
+            Fictional incidents for Bulawayo verification simulation. Citizen reports enter an unverified queue; AI never auto-publishes public safety warnings. Municipal integration pending authorization.
+          </span>
+        </div>
+        <span style={{ fontSize: '11px', opacity: 0.85, whiteSpace: 'nowrap' }}>
+          Africa/Harare (CAT)
+        </span>
+      </aside>
+
       {/* =====================================================================
           DESKTOP MASTHEAD (> 1020px: 1024px, 1440px, etc.)
           ===================================================================== */}
