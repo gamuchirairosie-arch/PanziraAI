@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { ASSETS } from '../assetsMap';
 import { usePanzira } from '../context/PanziraContext';
 import { useCardFocus } from '../context/CardFocusContext';
@@ -20,19 +20,25 @@ export const GlobalCardFocusModal: React.FC = () => {
     toggleGraphicReveal,
   } = usePanzira();
 
-  const { focusedCard, isFocused, closeFocus, setFocusedSignalId } = useCardFocus();
+  const {
+    focusedCard,
+    isFocused,
+    closeFocus,
+    setFocusedSignalId,
+    setFocusedAlertId,
+    setFocusedCorridorId,
+  } = useCardFocus();
 
-  // Escape key listener to close
-  useEffect(() => {
-    if (!isFocused) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeFocus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFocused, closeFocus]);
+  // Navigation crossfade transition state (matching triciaaa.vercel.app navigating animation)
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleNavigate = useCallback((action: () => void) => {
+    setIsNavigating(true);
+    window.setTimeout(() => {
+      action();
+      setIsNavigating(false);
+    }, 120);
+  }, []);
 
   // Prevent body scroll while modal is focused
   useEffect(() => {
@@ -87,14 +93,184 @@ export const GlobalCardFocusModal: React.FC = () => {
     };
   }, [currentSignal, signals]);
 
-  if (!isFocused || !focusedCard) return null;
+  // Alert navigation: Next / Previous alert
+  const alertNav = useMemo(() => {
+    if (!currentAlert) return null;
+    const idx = verifiedAlerts.findIndex((a) => a.id === currentAlert.id);
+    const prevAlert = idx > 0 ? verifiedAlerts[idx - 1] : null;
+    const nextAlert = idx >= 0 && idx < verifiedAlerts.length - 1 ? verifiedAlerts[idx + 1] : null;
+    return {
+      index: idx + 1,
+      total: verifiedAlerts.length,
+      prevAlert,
+      nextAlert,
+    };
+  }, [currentAlert, verifiedAlerts]);
 
-  const handleSelectSignal = (sig: SignalReport) => {
-    setSelectedMonitorId(sig.id);
-    setSelectedInboxId(sig.id);
-    setSelectedVerifyId(sig.id);
-    setFocusedSignalId(sig.id);
+  // Corridor navigation: Next / Previous corridor
+  const corridorNav = useMemo(() => {
+    if (!currentCorridor) return null;
+    const idx = corridors.findIndex((c) => c.id === currentCorridor.id);
+    const prevCorridor = idx > 0 ? corridors[idx - 1] : null;
+    const nextCorridor = idx >= 0 && idx < corridors.length - 1 ? corridors[idx + 1] : null;
+    return {
+      index: idx + 1,
+      total: corridors.length,
+      prevCorridor,
+      nextCorridor,
+    };
+  }, [currentCorridor, corridors]);
+
+  const handleSelectSignal = useCallback(
+    (sig: SignalReport) => {
+      setSelectedMonitorId(sig.id);
+      setSelectedInboxId(sig.id);
+      setSelectedVerifyId(sig.id);
+      setFocusedSignalId(sig.id);
+    },
+    [setSelectedMonitorId, setSelectedInboxId, setSelectedVerifyId, setFocusedSignalId]
+  );
+
+  const handleSelectAlert = useCallback(
+    (alt: VerifiedPublicAlert) => {
+      setFocusedAlertId(alt.id);
+    },
+    [setFocusedAlertId]
+  );
+
+  const handleSelectCorridor = useCallback(
+    (cor: CorridorWatchItem) => {
+      setSelectedCorridorId(cor.id as 'A5' | 'KHAMI' | 'ESIGODINI');
+      setFocusedCorridorId(cor.id);
+    },
+    [setSelectedCorridorId, setFocusedCorridorId]
+  );
+
+  // Active navigation items for ALLISMIND top bar (prev / next)
+  const activeNav = useMemo(() => {
+    if (currentSignal && signalNav) {
+      return {
+        label: `Signal ${signalNav.index} of ${signalNav.total}`,
+        hasPrev: Boolean(signalNav.prevSignal),
+        hasNext: Boolean(signalNav.nextSignal),
+        onPrev: () => {
+          if (signalNav.prevSignal) {
+            handleNavigate(() => handleSelectSignal(signalNav.prevSignal!));
+          }
+        },
+        onNext: () => {
+          if (signalNav.nextSignal) {
+            handleNavigate(() => handleSelectSignal(signalNav.nextSignal!));
+          }
+        },
+      };
+    }
+    if (currentAlert && alertNav) {
+      return {
+        label: `Alert ${alertNav.index} of ${alertNav.total}`,
+        hasPrev: Boolean(alertNav.prevAlert),
+        hasNext: Boolean(alertNav.nextAlert),
+        onPrev: () => {
+          if (alertNav.prevAlert) {
+            handleNavigate(() => handleSelectAlert(alertNav.prevAlert!));
+          }
+        },
+        onNext: () => {
+          if (alertNav.nextAlert) {
+            handleNavigate(() => handleSelectAlert(alertNav.nextAlert!));
+          }
+        },
+      };
+    }
+    if (currentCorridor && corridorNav) {
+      return {
+        label: `Corridor ${corridorNav.index} of ${corridorNav.total}`,
+        hasPrev: Boolean(corridorNav.prevCorridor),
+        hasNext: Boolean(corridorNav.nextCorridor),
+        onPrev: () => {
+          if (corridorNav.prevCorridor) {
+            handleNavigate(() => handleSelectCorridor(corridorNav.prevCorridor!));
+          }
+        },
+        onNext: () => {
+          if (corridorNav.nextCorridor) {
+            handleNavigate(() => handleSelectCorridor(corridorNav.nextCorridor!));
+          }
+        },
+      };
+    }
+    return null;
+  }, [
+    currentSignal,
+    signalNav,
+    currentAlert,
+    alertNav,
+    currentCorridor,
+    corridorNav,
+    handleNavigate,
+    handleSelectSignal,
+    handleSelectAlert,
+    handleSelectCorridor,
+  ]);
+
+  // Keyboard navigation listener (Escape = Close, ArrowLeft = Prev, ArrowRight = Next)
+  useEffect(() => {
+    if (!isFocused) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeFocus();
+      } else if (e.key === 'ArrowLeft') {
+        if (activeNav && activeNav.hasPrev) {
+          e.preventDefault();
+          activeNav.onPrev();
+        }
+      } else if (e.key === 'ArrowRight') {
+        if (activeNav && activeNav.hasNext) {
+          e.preventDefault();
+          activeNav.onNext();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFocused, closeFocus, activeNav]);
+
+  // Touch gesture listeners (Swipe left = next, swipe right = prev, swipe down = close)
+  const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
   };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0 && activeNav?.hasNext) {
+        activeNav.onNext();
+      } else if (dx > 0 && activeNav?.hasPrev) {
+        activeNav.onPrev();
+      }
+    } else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) {
+      closeFocus();
+    }
+  };
+
+  if (!isFocused || !focusedCard) return null;
 
   const renderBadge = (label?: string, color?: string) => {
     if (!label) return null;
@@ -117,88 +293,93 @@ export const GlobalCardFocusModal: React.FC = () => {
         }
       }}
     >
-      <div className="pz-focus-modal-dialog">
+      <div
+        className={`pz-focus-modal-dialog ${isNavigating ? 'navigating is-navigating' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* ===================================================================
-            HEADER: Category Tag, Title, Subtitle, Close X Button
+            READER BAR (ALLISMIND — Library Navigation Pattern)
             =================================================================== */}
-        <header className="pz-focus-modal-header">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, flex: 1 }}>
+        <div className="pz-reader-bar">
+          <button
+            type="button"
+            className="pz-reader-btn pz-reader-close-btn"
+            onClick={closeFocus}
+            aria-label="Close reader overlay"
+          >
+            <span>✕ Close</span>
+            <span className="pz-kbd-badge">Esc</span>
+          </button>
+
+          <div className="pz-reader-counter">
+            <span className="pz-focus-category-tag">
+              {focusedCard.categoryLabel || focusedCard.type.toUpperCase()}
+            </span>
+            {activeNav ? (
+              <span className="pz-reader-counter-text">{activeNav.label}</span>
+            ) : focusedCard.badge ? (
+              renderBadge(focusedCard.badge, focusedCard.badgeColor)
+            ) : null}
+          </div>
+
+          <div className="pz-reader-nav">
+            <button
+              type="button"
+              className="pz-reader-btn"
+              disabled={!activeNav || !activeNav.hasPrev}
+              onClick={activeNav?.onPrev}
+              title="Previous item (Left Arrow key)"
+            >
+              <span>← Previous</span>
+              <span className="pz-kbd-badge">←</span>
+            </button>
+            <button
+              type="button"
+              className="pz-reader-btn"
+              disabled={!activeNav || !activeNav.hasNext}
+              onClick={activeNav?.onNext}
+              title="Next item (Right Arrow key)"
+            >
+              <span>Next →</span>
+              <span className="pz-kbd-badge">→</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ===================================================================
+            READER BODY: Focused Content with Inter Typography Scale
+            =================================================================== */}
+        <div className="pz-focus-modal-body">
+          {/* Header Area inside scrollable reader */}
+          <div className="pz-reader-header-area">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="pz-focus-category-tag">
-                {focusedCard.categoryLabel || focusedCard.type.toUpperCase()}
-              </span>
               {focusedCard.badge && renderBadge(focusedCard.badge, focusedCard.badgeColor)}
               {currentSignal && (
                 <span className="pz-badge pz-badge-neutral" style={{ fontWeight: 600 }}>
                   {currentSignal.id}
                 </span>
               )}
+              {currentAlert && currentAlert.isCritical && (
+                <span className="pz-badge pz-badge-critical">Critical Severity</span>
+              )}
             </div>
 
-            <h2 className="pz-focus-modal-title">
+            <h2 className="pz-reader-title">
               {currentSignal?.title || currentAlert?.title || currentCorridor?.name || focusedCard.title}
             </h2>
 
             {(focusedCard.subtitle || currentSignal?.subtitle || currentAlert?.location) && (
-              <p className="pz-focus-modal-subtitle">
+              <p className="pz-reader-meta">
                 {currentSignal?.subtitle ||
-                  (currentAlert && `${currentAlert.location} · ${currentAlert.corridor}`) ||
+                  (currentAlert && `${currentAlert.location} · ${currentAlert.corridor} · Updated ${currentAlert.updatedAgo}`) ||
                   focusedCard.subtitle}
               </p>
             )}
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="pz-focus-esc-hint" title="Press Escape to close">
-              ESC
-            </span>
-            <button
-              type="button"
-              className="pz-focus-close-btn"
-              onClick={closeFocus}
-              aria-label="Close expanded card view"
-            >
-              <img src={ASSETS.closeX} alt="" style={{ width: '18px', height: '18px' }} />
-            </button>
-          </div>
-        </header>
-
-        {/* ===================================================================
-            BODY CONTENT BASED ON FOCUSED CARD TYPE
-            =================================================================== */}
-        <div className="pz-focus-modal-body">
           {/* 1. SIGNAL TYPE (Incoming signals, inbox leads, selected signal) */}
           {focusedCard.type === 'signal' && currentSignal && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Signal Pager Bar */}
-              {signalNav && (
-                <div className="pz-focus-signal-pager">
-                  <div style={{ fontSize: '13px', color: 'var(--pz-muted)', fontWeight: 500 }}>
-                    Signal <strong>{signalNav.index}</strong> of <strong>{signalNav.total}</strong> in active intake
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="pz-btn-secondary"
-                      style={{ height: '32px', fontSize: '12px', padding: '0 12px' }}
-                      disabled={!signalNav.prevSignal}
-                      onClick={() => signalNav.prevSignal && handleSelectSignal(signalNav.prevSignal)}
-                    >
-                      ← Previous
-                    </button>
-                    <button
-                      type="button"
-                      className="pz-btn-secondary"
-                      style={{ height: '32px', fontSize: '12px', padding: '0 12px' }}
-                      disabled={!signalNav.nextSignal}
-                      onClick={() => signalNav.nextSignal && handleSelectSignal(signalNav.nextSignal)}
-                    >
-                      Next Signal →
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Status and Metadata Strip */}
               <div className="pz-focus-meta-strip">
                 <div>

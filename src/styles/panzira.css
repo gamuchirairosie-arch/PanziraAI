@@ -1857,44 +1857,149 @@ select:focus-visible,
 }
 
 /* Focus Modal Backdrop */
+/* Focus / Reader Modal Backdrop */
 .pz-focus-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(23, 27, 34, 0.65);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   z-index: 2500;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  animation: pzFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 20px;
+  animation: pzFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Focus Modal Dialog */
+/* Reader Dialog Card */
 .pz-focus-modal-dialog {
   background: var(--pz-white);
-  border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28), 0 1px 3px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--pz-border);
   width: 100%;
-  max-width: 960px;
-  max-height: 90vh;
+  max-width: 780px;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: pzScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  animation: pzScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Header */
-.pz-focus-modal-header {
-  padding: 22px 28px 18px;
-  border-bottom: 1px solid var(--pz-border);
+/* ALLISMIND Crossfade Animation State */
+.pz-focus-modal-dialog.navigating,
+.pz-focus-modal-dialog.is-navigating {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+/* ALLISMIND Reader Top Bar */
+.pz-reader-bar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--pz-border);
   background: #fafbfc;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.pz-reader-btn {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--pz-border);
+  background: var(--pz-white);
+  color: var(--pz-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pz-reader-btn:hover:not(:disabled) {
+  background: var(--pz-pale);
+  border-color: var(--pz-primary-green);
+  color: var(--pz-primary-green);
+}
+
+.pz-reader-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.pz-reader-close-btn {
+  font-weight: 600;
+}
+
+.pz-kbd-badge {
+  font-size: 10.5px;
+  font-family: inherit;
+  font-weight: 700;
+  background: var(--pz-pale);
+  border: 1px solid var(--pz-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--pz-muted);
+  line-height: 1.2;
+}
+
+.pz-reader-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pz-muted);
+  font-weight: 500;
+}
+
+.pz-reader-counter-text {
+  font-weight: 600;
+  color: var(--pz-text);
+}
+
+.pz-reader-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Header Area inside scrollable reader */
+.pz-reader-header-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--pz-border);
+}
+
+.pz-reader-title {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--pz-text);
+  line-height: 1.3;
+  margin: 0;
+  letter-spacing: -0.015em;
+}
+
+.pz-reader-meta {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14.5px;
+  color: var(--pz-muted);
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .pz-focus-category-tag {

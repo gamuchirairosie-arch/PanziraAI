@@ -43,7 +43,8 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
-  const [activeLayer, setActiveLayer] = useState<'osm' | 'carto' | 'satellite'>('carto');
+  // OpenStreetMap is the default street layer and needs no API key.
+  const [activeLayer, setActiveLayer] = useState<'osm' | 'satellite'>('osm');
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -59,10 +60,8 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
       // Position zoom controls in top-left
       L.control.zoom({ position: 'topleft' }).addTo(map);
 
-      // Attribution
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
 
@@ -91,8 +90,8 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
       }
     });
 
-    let url = '';
-    let attr = '';
+    let url: string;
+    let attr: string;
 
     if (activeLayer === 'osm') {
       url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -102,9 +101,8 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
       attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
     } else {
-      // Default: Carto Voyager (clean, modern cartography with sharp road labels)
-      url = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-      attr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>';
+      url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      attr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
     }
 
     L.tileLayer(url, { attribution: attr, maxZoom: 19 }).addTo(map);
@@ -246,22 +244,6 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
       >
         <button
           type="button"
-          onClick={() => setActiveLayer('carto')}
-          style={{
-            border: 'none',
-            background: activeLayer === 'carto' ? '#145438' : 'transparent',
-            color: activeLayer === 'carto' ? '#ffffff' : '#37463e',
-            fontSize: '11px',
-            fontWeight: 600,
-            padding: '4px 8px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          Street
-        </button>
-        <button
-          type="button"
           onClick={() => setActiveLayer('osm')}
           style={{
             border: 'none',
@@ -274,7 +256,7 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
             cursor: 'pointer',
           }}
         >
-          OSM
+          Street
         </button>
         <button
           type="button"

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ASSETS } from '../assetsMap';
 import { CorridorContextMap } from '../components/BulawayoMap';
 import { usePanzira } from '../context/PanziraContext';
+import { useCardFocus } from '../context/CardFocusContext';
 
 export const HotspotIntelligenceView: React.FC = () => {
   const {
@@ -10,6 +11,8 @@ export const HotspotIntelligenceView: React.FC = () => {
     setSelectedCorridorId,
     navigateNewsroom,
   } = usePanzira();
+
+  const { focusCard } = useCardFocus();
 
   const selectedCorridor = useMemo(() => {
     return corridors.find((c) => c.id === selectedCorridorId) || corridors[0];
@@ -53,15 +56,61 @@ export const HotspotIntelligenceView: React.FC = () => {
 
       {/* 4 Screening Metrics */}
       <section className="pz-metrics-grid-4" aria-label="Hotspot screening metrics">
-        <div className="pz-metric-card">
+        <button
+          type="button"
+          className="pz-metric-card pz-expandable-card"
+          style={{ textAlign: 'left', cursor: 'pointer' }}
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Corridors on Active Watchlist',
+              subtitle: 'A5 Harare Rd, Khami Rd, Esigodini Rd',
+              categoryLabel: 'SURVEILLANCE WATCHLIST',
+              metricValue: '03',
+              metricDescription: 'Primary commercial transit arteries in Bulawayo',
+              description:
+                'Corridors are continuously screened for cluster density of pothole damage, flash flooding, and bottleneck collisions reported by citizens and fleet drivers.',
+              metadata: [
+                { label: 'Harare Rd (A5)', value: 'High priority · Severe washouts' },
+                { label: 'Khami Rd', value: 'Medium priority · Heavy vehicle congestion' },
+                { label: 'Esigodini Rd', value: 'Watch priority · Incomplete repairs' },
+              ],
+            })
+          }
+          title="Click to view corridors watchlist metric details"
+        >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value">03</span>
           <span className="pz-metric-label">Corridors on watchlist</span>
           <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
             A5, Khami Rd, Esigodini Rd
           </span>
-        </div>
+        </button>
 
-        <div className="pz-metric-card">
+        <button
+          type="button"
+          className="pz-metric-card pz-expandable-card"
+          style={{ textAlign: 'left', cursor: 'pointer' }}
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Clustered Corridor Mentions',
+              subtitle: '06 candidate duplicate signals grouped by corridor location',
+              categoryLabel: 'CLUSTER TRIAGE',
+              metricValue: '06',
+              metricDescription: 'Deduplication and signal corroboration grouping',
+              description:
+                'AI matches incoming tips mentioning similar landmarks or road intersections along the same corridor to prevent multiple conflicting alert reports.',
+              metadata: [
+                { label: 'A5 Mentions', value: '4 reports clustered near Cement Siding' },
+                { label: 'Khami Rd Mentions', value: '2 reports near flyover' },
+                { label: 'Deduplication Method', value: 'Temporal + Geo-corridor clustering' },
+              ],
+            })
+          }
+          title="Click to view clustered mentions metric details"
+        >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value" style={{ color: 'var(--pz-amber-text)' }}>
             06
           </span>
@@ -69,9 +118,32 @@ export const HotspotIntelligenceView: React.FC = () => {
           <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
             Includes duplicate candidates
           </span>
-        </div>
+        </button>
 
-        <div className="pz-metric-card">
+        <button
+          type="button"
+          className="pz-metric-card pz-expandable-card"
+          style={{ textAlign: 'left', cursor: 'pointer' }}
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Screening Confidence Ceiling',
+              subtitle: 'Low · Field verification pending',
+              categoryLabel: 'STATISTICAL HONESTY',
+              metricValue: 'Low',
+              metricDescription: 'No autonomous high-confidence claims before human check',
+              description:
+                'Panzira AI explicitly caps confidence levels on unverified incoming tips. We never claim high certainty or predictive certainty without verified eyewitness corroboration.',
+              metadata: [
+                { label: 'Confidence Ceiling', value: 'Low / Provisional' },
+                { label: 'Autonomous Claims', value: 'Prohibited by system policy' },
+                { label: 'Required Action', value: 'Editorial confirmation needed' },
+              ],
+            })
+          }
+          title="Click to view screening confidence metric details"
+        >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value" style={{ color: 'var(--pz-amber-text)' }}>
             Low
           </span>
@@ -79,15 +151,37 @@ export const HotspotIntelligenceView: React.FC = () => {
           <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
             Field verification pending
           </span>
-        </div>
+        </button>
 
-        <div className="pz-metric-card">
+        <button
+          type="button"
+          className="pz-metric-card pz-expandable-card"
+          style={{ textAlign: 'left', cursor: 'pointer' }}
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Zero Predictive Crash Claims',
+              subtitle: 'Editorial leads only · Ethical AI invariant',
+              categoryLabel: 'ETHICAL SAFEGUARD',
+              metricValue: '00',
+              metricDescription: 'We do not claim to forecast vehicle accidents',
+              description:
+                'Panzira AI avoids false predictive certainty. Algorithms highlight active hazard concentrations, but do not pretend to predict vehicle crashes.',
+              metadata: [
+                { label: 'Predictive Claims', value: '0 (Strictly Blocked)', color: 'var(--pz-primary-green)' },
+                { label: 'Ethics Standard', value: 'Responsible AI Journalism' },
+              ],
+            })
+          }
+          title="Click to view predictive crash claims safeguard"
+        >
+          <span className="pz-expand-hint-pill">Expand ⤢</span>
           <span className="pz-metric-value">00</span>
           <span className="pz-metric-label">Predictive crash claims</span>
           <span style={{ fontSize: '12px', color: 'var(--pz-primary-green)', fontWeight: 600 }}>
             Editorial leads only
           </span>
-        </div>
+        </button>
       </section>
 
       {/* Main Split: Watchlist + Corridor Map & Explainability */}
@@ -102,10 +196,23 @@ export const HotspotIntelligenceView: React.FC = () => {
               <button
                 key={corr.id}
                 type="button"
-                className={`pz-signal-card ${isSelected ? 'is-selected' : ''}`}
+                className={`pz-signal-card pz-expandable-card ${isSelected ? 'is-selected' : ''}`}
                 style={{ padding: '16px', gap: '8px' }}
-                onClick={() => setSelectedCorridorId(corr.id)}
+                onClick={() => {
+                  setSelectedCorridorId(corr.id);
+                  focusCard({
+                    type: 'corridor',
+                    corridorId: corr.id,
+                    title: corr.name,
+                    subtitle: corr.hazardSummary,
+                    categoryLabel: 'CORRIDOR WATCHLIST ITEM',
+                    badge: corr.badge,
+                    badgeColor: corr.badgeColor === 'red' ? 'red' : 'amber',
+                  });
+                }}
+                title="Click to open corridor intelligence in reader overlay"
               >
+                <span className="pz-expand-hint-pill">Expand ⤢</span>
                 <div
                   style={{
                     display: 'flex',

@@ -4,6 +4,7 @@ import { PublicBulawayoMap } from '../components/BulawayoMap';
 import { WhatsAppSimulatorModal } from '../components/WhatsAppSimulatorModal';
 import { UssdSimulatorModal } from '../components/UssdSimulatorModal';
 import { usePanzira } from '../context/PanziraContext';
+import { useCardFocus } from '../context/CardFocusContext';
 import { VerifiedPublicAlert } from '../types';
 
 type PublicCategoryFilter = 'all' | 'collisions' | 'potholes' | 'flooding';
@@ -21,6 +22,8 @@ export const PublicDashboardView: React.FC = () => {
     publicSearch,
     setPublicSearch,
   } = usePanzira();
+
+  const { focusCard } = useCardFocus();
 
   const [categoryFilter, setCategoryFilter] = useState<PublicCategoryFilter>('all');
   const [severityOnlyCritical, setSeverityOnlyCritical] = useState(false);
@@ -210,13 +213,37 @@ export const PublicDashboardView: React.FC = () => {
 
       <div
         style={{
-          fontSize: '12.5px',
-          color: 'var(--pz-muted)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
           borderTop: '1px solid var(--pz-border)',
-          paddingTop: '8px',
+          paddingTop: '10px',
         }}
       >
-        <strong>Verification provenance:</strong> {alert.sourceAttribution}
+        <div style={{ fontSize: '12.5px', color: 'var(--pz-muted)' }}>
+          <strong>Verification provenance:</strong> {alert.sourceAttribution}
+        </div>
+
+        <button
+          type="button"
+          className="pz-btn-secondary"
+          style={{ minHeight: '34px', fontSize: '12.5px', padding: '4px 12px' }}
+          onClick={() =>
+            focusCard({
+              type: 'alert',
+              alertId: alert.id,
+              title: alert.title,
+              subtitle: `${alert.location} · ${alert.corridor}`,
+              categoryLabel: 'VERIFIED ROAD ALERT',
+              badge: alert.isCritical ? 'Critical' : 'Panzira Verified',
+              badgeColor: alert.isCritical ? 'red' : 'green',
+            })
+          }
+        >
+          Read Full Advisory ⤢
+        </button>
       </div>
     </div>
   );
@@ -265,7 +292,22 @@ export const PublicDashboardView: React.FC = () => {
           {citizenSubmissions.map((item) => {
             const metChecks = Object.values(item.checklist).filter(Boolean).length;
             return (
-              <div key={item.id} className="pz-card-panel">
+              <div
+                key={item.id}
+                className="pz-card-panel pz-expandable-card"
+                onClick={() =>
+                  focusCard({
+                    type: 'signal',
+                    signalId: item.id,
+                    title: item.title,
+                    subtitle: `${item.roadArea} · ${item.landmark}`,
+                    categoryLabel: 'MY SUBMITTED CITIZEN REPORT',
+                    badge: item.monitorStatusLabel,
+                  })
+                }
+                title="Click to view full report in reader overlay"
+              >
+                <span className="pz-expand-hint-pill">Expand ⤢</span>
                 <div
                   style={{
                     display: 'flex',
@@ -417,7 +459,23 @@ export const PublicDashboardView: React.FC = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filteredAlerts.map((alert) => (
-              <article key={alert.id} className="pz-card-panel">
+              <article
+                key={alert.id}
+                className="pz-card-panel pz-expandable-card"
+                onClick={() =>
+                  focusCard({
+                    type: 'alert',
+                    alertId: alert.id,
+                    title: alert.title,
+                    subtitle: `${alert.location} · ${alert.corridor}`,
+                    categoryLabel: 'VERIFIED ROAD ALERT',
+                    badge: alert.isCritical ? 'Critical' : 'Panzira Verified',
+                    badgeColor: alert.isCritical ? 'red' : 'green',
+                  })
+                }
+                title="Click to open full alert in reader overlay"
+              >
+                <span className="pz-expand-hint-pill">Expand ⤢</span>
                 <div
                   style={{
                     display: 'flex',
@@ -577,21 +635,85 @@ export const PublicDashboardView: React.FC = () => {
 
       {/* 3-Metric Summary Strip */}
       <section className="pz-public-summary-strip" aria-label="Bulawayo summary metrics">
-        <div>
+        <button
+          type="button"
+          className="pz-summary-metric-btn pz-expandable-card"
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Approved Verified Alerts in Bulawayo',
+              subtitle: 'Live road safety hazard alerts published on the public map',
+              categoryLabel: 'PUBLIC SAFETY METRIC',
+              metricValue: String(approvedAlertsCount),
+              metricDescription: 'Every alert verified by accredited human newsroom editors',
+              description:
+                'Panzira AI publishes verified road hazards only after independent corroboration across eyewitness reports, municipal logs, or field reporters. Unverified leads and graphic imagery remain strictly protected from the public view.',
+              metadata: [
+                { label: 'Active Corridors', value: 'Harare Rd (A5), Khami Rd, Esigodini Rd' },
+                { label: 'Corroboration Standard', value: '4-Point Independent Check' },
+                { label: 'Autonomous AI Releases', value: '0 (Strictly Blocked)', color: 'var(--pz-primary-green)' },
+              ],
+            })
+          }
+          title="Click to view verified alerts metric details"
+        >
           <div className="pz-summary-metric-value">{approvedAlertsCount}</div>
           <div style={{ fontSize: '13px', color: 'var(--pz-muted)', marginTop: '2px' }}>
-            Approved verified alerts in Bulawayo
+            Approved verified alerts in Bulawayo ⤢
           </div>
-        </div>
+        </button>
 
-        <div>
+        <button
+          type="button"
+          className="pz-summary-metric-btn pz-expandable-card"
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Active Arterial Road Corridors',
+              subtitle: 'High-density highways connecting Bulawayo metro and industrial hubs',
+              categoryLabel: 'CORRIDOR SURVEILLANCE',
+              metricValue: '03',
+              metricDescription: 'Harare Road (A5), Khami Road, Esigodini Road',
+              description:
+                'These arterial corridors experience high heavy-vehicle traffic and public transport volume. Panzira maintains priority watchlists and early hazard triage for commuters.',
+              metadata: [
+                { label: 'A5 (Harare Rd)', value: 'High-speed corridor · Potholes & surface washouts' },
+                { label: 'Khami Rd', value: 'Industrial artery · Drainage flooding & truck collisions' },
+                { label: 'Esigodini Rd', value: 'Suburban artery · Sharp drop-offs & construction' },
+              ],
+            })
+          }
+          title="Click to view monitored corridors details"
+        >
           <div className="pz-summary-metric-value">3</div>
           <div style={{ fontSize: '13px', color: 'var(--pz-muted)', marginTop: '2px' }}>
-            Active corridors (A5, Khami Rd, Esigodini Rd)
+            Active corridors (A5, Khami Rd, Esigodini Rd) ⤢
           </div>
-        </div>
+        </button>
 
-        <div data-testid="editorial-last-updated">
+        <button
+          type="button"
+          data-testid="editorial-last-updated"
+          className="pz-summary-metric-btn pz-expandable-card"
+          onClick={() =>
+            focusCard({
+              type: 'metric',
+              title: 'Editorial Gate Last Synchronized',
+              subtitle: `${lastEditorialUpdateTime} · ${lastEditorialUpdateDateLabel}`,
+              categoryLabel: 'EDITORIAL AUDIT LOG',
+              metricValue: lastEditorialUpdateTime,
+              metricDescription: 'Latest verified incident sign-off timestamp',
+              description:
+                'All updates reflect Africa/Harare time. Every published alert is attributable to an authenticated journalist or editor who completed the 4 verification gates.',
+              metadata: [
+                { label: 'Timestamp (CAT)', value: `${lastEditorialUpdateTime} (Africa/Harare)` },
+                { label: 'Date', value: lastEditorialUpdateDateLabel },
+                { label: 'Audit Accountability', value: 'Preserved in panzira.db sqlite log' },
+              ],
+            })
+          }
+          title="Click to view editorial audit timestamp details"
+        >
           <div
             className="pz-summary-metric-value"
             style={{ color: 'var(--pz-primary-green)' }}
@@ -599,9 +721,9 @@ export const PublicDashboardView: React.FC = () => {
             {lastEditorialUpdateTime}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--pz-muted)', marginTop: '2px' }}>
-            {lastEditorialUpdateDateLabel}
+            {lastEditorialUpdateDateLabel} ⤢
           </div>
-        </div>
+        </button>
       </section>
 
       {/* Filter Pills + Search */}
@@ -677,9 +799,22 @@ export const PublicDashboardView: React.FC = () => {
                   <button
                     key={alert.id}
                     type="button"
-                    className={`pz-alert-row-card ${isSelected ? 'is-selected' : ''}`}
-                    onClick={() => setSelectedAlertId(alert.id)}
+                    className={`pz-alert-row-card pz-expandable-card ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setSelectedAlertId(alert.id);
+                      focusCard({
+                        type: 'alert',
+                        alertId: alert.id,
+                        title: alert.title,
+                        subtitle: `${alert.location} · ${alert.corridor}`,
+                        categoryLabel: 'VERIFIED ROAD ALERT',
+                        badge: alert.isCritical ? 'Critical' : 'Panzira Verified',
+                        badgeColor: alert.isCritical ? 'red' : 'green',
+                      });
+                    }}
+                    title="Click to view full alert in reader overlay"
                   >
+                    <span className="pz-expand-hint-pill">Expand ⤢</span>
                     <div
                       style={{
                         display: 'flex',

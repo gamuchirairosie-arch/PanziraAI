@@ -45,6 +45,8 @@ interface CardFocusContextValue {
   focusCard: (data: FocusedCardData) => void;
   closeFocus: () => void;
   setFocusedSignalId: (id: string) => void;
+  setFocusedAlertId: (id: string) => void;
+  setFocusedCorridorId: (id: string) => void;
 }
 
 const CardFocusContext = createContext<CardFocusContextValue | null>(null);
@@ -70,6 +72,26 @@ export const CardFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   }, []);
 
+  const setFocusedAlertId = useCallback((id: string) => {
+    setFocusedCard((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        alertId: id,
+      };
+    });
+  }, []);
+
+  const setFocusedCorridorId = useCallback((id: string) => {
+    setFocusedCard((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        corridorId: id,
+      };
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       focusedCard,
@@ -77,8 +99,10 @@ export const CardFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       focusCard,
       closeFocus,
       setFocusedSignalId,
+      setFocusedAlertId,
+      setFocusedCorridorId,
     }),
-    [focusedCard, focusCard, closeFocus, setFocusedSignalId]
+    [focusedCard, focusCard, closeFocus, setFocusedSignalId, setFocusedAlertId, setFocusedCorridorId]
   );
 
   return <CardFocusContext.Provider value={value}>{children}</CardFocusContext.Provider>;

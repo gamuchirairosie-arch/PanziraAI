@@ -419,6 +419,30 @@ export const SignalMonitorView: React.FC = () => {
                   type="button"
                   className="pz-btn-secondary"
                   style={{ minHeight: '38px', fontSize: '13px' }}
+                  onClick={() =>
+                    focusCard({
+                      type: 'signal',
+                      signalId: selectedSignal.id,
+                      title: selectedSignal.title,
+                      subtitle: selectedSignal.subtitle,
+                      categoryLabel: 'INCOMING SIGNAL LEAD',
+                      badge: selectedSignal.monitorStatusLabel,
+                      badgeColor:
+                        selectedSignal.monitorStatusColor === 'green'
+                          ? 'green'
+                          : selectedSignal.monitorStatusColor === 'red'
+                            ? 'red'
+                            : 'amber',
+                    })
+                  }
+                  title="Open in focused reader view"
+                >
+                  Read Full Signal ⤢
+                </button>
+                <button
+                  type="button"
+                  className="pz-btn-secondary"
+                  style={{ minHeight: '38px', fontSize: '13px' }}
                   onClick={() => navigateNewsroom('inbox', selectedSignal.id)}
                 >
                   View in Inbox →
