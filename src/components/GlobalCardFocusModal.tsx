@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { ASSETS } from '../assetsMap';
 import { usePanzira } from '../context/PanziraContext';
 import { useCardFocus } from '../context/CardFocusContext';
 import { EvidencePhotoFrame } from './CroppedFigmaMedia';
