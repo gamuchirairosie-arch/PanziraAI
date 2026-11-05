@@ -40,10 +40,22 @@ CATEGORY_ALIASES = {
     "visibility": "4", "lighting": "4", "signs": "4",
     "other": "5",
 }
+CATEGORY_KEYBOARD = {"inline_keyboard": [
+    [{"text": "🕳️ Pothole / road damage", "callback_data": "category:1"}],
+    [{"text": "🌊 Flooding / standing water", "callback_data": "category:2"}],
+    [{"text": "🚗 Collision / breakdown / obstruction", "callback_data": "category:3"}],
+    [{"text": "⚠️ Visibility / signs", "callback_data": "category:4"}],
+    [{"text": "Other road hazard", "callback_data": "category:5"}],
+]}
+EVIDENCE_KEYBOARD = {"keyboard": [
+    [{"text": "📍 Share location", "request_location": True}],
+    [{"text": "✅ Submit report"}, {"text": "❌ Cancel"}],
+], "resize_keyboard": True, "one_time_keyboard": True}
+REMOVE_KEYBOARD = {"remove_keyboard": True}
 
 
-def _send(db: Session, chat_id: int, body: str) -> None:
-    msg.send(db, "telegram", str(chat_id), body)
+def _send(db: Session, chat_id: int, body: str, reply_markup: dict | None = None) -> None:
+    msg.send(db, "telegram", str(chat_id), body, reply_markup=reply_markup)
 
 
 def _draft(db: Session, contact: str) -> TelegramDraft | None:
@@ -64,7 +76,8 @@ def _start_draft(db: Session, contact: str, chat_id: int) -> TelegramDraft:
           "Road incident report - step 1 of 6\n"
           "What type of hazard is it? Reply with a number:\n"
           "1 Pothole / road damage\n2 Flooding / standing water\n"
-          "3 Collision / breakdown / obstruction\n4 Visibility / lighting / signs\n5 Other")
+          "3 Collision / breakdown / obstruction\n4 Visibility / lighting / signs\n5 Other",
+          CATEGORY_KEYBOARD)
     return draft
 
 
@@ -113,7 +126,9 @@ def _finish_draft(db: Session, draft: TelegramDraft, contact: str, chat_id: int,
                 log.warning("Telegram image rejected for report %s", report.public_id)
     db.delete(draft)
     if created:
-        _send(db, chat_id, f"Report {report.public_id} received. It is an unverified lead for newsroom review and is not a public alert.")
+        _send(db, chat_id,
+              f"Report {report.public_id} received. It is an unverified lead for newsroom review and is not a public alert.",
+              REMOVE_KEYBOARD)
         editor_chat = get_settings().telegram_editor_chat_id
         if editor_chat:
             msg.send(db, "telegram", editor_chat,
@@ -177,7 +192,8 @@ def _handle_draft(db: Session, draft: TelegramDraft, message: dict, contact: str
         draft.description = value
         draft.state = "evidence"
         _send(db, chat_id,
-              "Step 6 of 6 - Optional evidence\nSend a photo and/or Telegram location pin. When ready, reply SUBMIT. Reply SUBMIT now to continue without evidence.")
+              "Step 6 of 6 - Optional evidence\nSend a photo and/or use the location button. When ready, tap Submit report. You can also type SUBMIT.",
+              EVIDENCE_KEYBOARD)
         return None
 
     if draft.state == "evidence":
@@ -192,8 +208,12 @@ def _handle_draft(db: Session, draft: TelegramDraft, message: dict, contact: str
         if added:
             _send(db, chat_id, f"Added {' and '.join(added)}. Send more evidence or reply SUBMIT.")
             return None
-        if body.lower() in {"submit", "done", "skip"}:
+        if body.lower() in {"submit", "submit report", "done", "skip"}:
             return _finish_draft(db, draft, contact, chat_id, consent, fetch_photo)
+        if body.lower() in {"cancel", "❌ cancel"}:
+            db.delete(draft)
+            _send(db, chat_id, "Report cancelled. Send /report when you are ready to start again.", REMOVE_KEYBOARD)
+            return None
         _send(db, chat_id, "Send a photo/location pin, or reply SUBMIT to file the report.")
     return None
 
@@ -212,6 +232,51 @@ def _claim_update(db: Session, update: dict) -> bool:
         db.rollback()
         return False
     return True
+
+
+def _handle_callback(db: Session, callback: dict, fetch_photo) -> int | None:
+    callback_id = callback.get("id")
+    message = callback.get("message") or {}
+    chat = message.get("chat") or {}
+    sender = callback.get("from") or {}
+    chat_id, user_id = chat.get("id"), sender.get("id")
+    if callback_id:
+        try:
+            _telegram_call("answerCallbackQuery", {"callback_query_id": callback_id})
+        except Exception:
+            # Message handling remains available in local tests or during a Bot API outage.
+            log.warning("Telegram callback acknowledgement failed")
+    if chat.get("type") != "private" or chat_id is None or user_id is None:
+        return None
+
+    contact = str(user_id)
+    consent = get_consent(db, contact, "telegram")
+    if not consent:
+        _send(db, chat_id,
+              "Panzira can store your road-safety report for newsroom review and follow up about it. Reply YES to consent. Reply STOP at any time to withdraw.")
+        return None
+
+    data = str(callback.get("data") or "")
+    if data == "report:help":
+        _send(db, chat_id,
+              "Send /report to submit a road hazard. You can include a landmark, observation time, photo, and optional location pin. A newsroom editor checks every lead before publication.")
+        return None
+    if data == "report:start":
+        _start_draft(db, contact, chat_id)
+        return None
+
+    draft = _draft(db, contact)
+    if not draft:
+        _send(db, chat_id, "That button has expired. Send /report to start a new report.")
+        return None
+
+    if data.startswith("category:") and draft.state == "category":
+        choice = data.removeprefix("category:")
+        return _handle_draft(db, draft, {"text": choice}, contact, chat_id, consent, fetch_photo)
+    if data == "evidence:submit" and draft.state == "evidence":
+        return _handle_draft(db, draft, {"text": "SUBMIT"}, contact, chat_id, consent, fetch_photo)
+    _send(db, chat_id, "That button is no longer available. Continue with the latest report question.")
+    return None
 
 
 def _telegram_call(method: str, payload: dict | None = None) -> dict:
@@ -254,6 +319,9 @@ def handle_update(db: Session, update: dict, fetch_photo=download_photo) -> int 
     """Process a Bot API update. Returns a report id only when a new report is created."""
     if not _claim_update(db, update):
         return None
+    callback = update.get("callback_query")
+    if callback:
+        return _handle_callback(db, callback, fetch_photo)
     message = update.get("message") or update.get("edited_message")
     if not message:
         return None

@@ -59,6 +59,25 @@ def test_telegram_requires_consent_and_is_idempotent(sent):
     db.close()
 
 
+def test_telegram_inline_category_callback_updates_persistent_draft(sent, monkeypatch):
+    monkeypatch.setattr(telegram, "_telegram_call", lambda *args, **kwargs: {})
+    db = SessionLocal()
+    user_id = 777004
+    record_consent(db, str(user_id), "telegram", "en", allow_followup=True)
+    started = {"update_id": 9101, "message": {"message_id": 1,
+               "chat": {"id": user_id, "type": "private"}, "from": {"id": user_id}, "text": "/report"}}
+    assert telegram.handle_update(db, started) is None
+    callback = {"update_id": 9102, "callback_query": {"id": "callback-1",
+                "from": {"id": user_id}, "message": {"message_id": 2,
+                "chat": {"id": user_id, "type": "private"}}, "data": "category:3"}}
+    assert telegram.handle_update(db, callback) is None
+    draft = db.execute(select(TelegramDraft)).scalars().one()
+    assert draft.category_key == "collisions"
+    assert draft.state == "road"
+    assert any("Step 2 of 6" in body for _, _, body in sent.sent)
+    db.close()
+
+
 def test_duplicate_webhook_delivery_has_no_duplicate_reply(client, sent, monkeypatch):
     from app.config import get_settings
 

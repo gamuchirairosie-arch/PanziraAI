@@ -15,7 +15,8 @@ log = logging.getLogger("panzira.messenger")
 
 
 class Messenger:
-    def send(self, db: Session, channel: str, to: str, body: str) -> str:
+    def send(self, db: Session, channel: str, to: str, body: str,
+             reply_markup: dict | None = None) -> str:
         s = get_settings()
         status = "logged"
         try:
@@ -37,9 +38,12 @@ class Messenger:
                            data=data, timeout=10).raise_for_status()
                 status = "sent"
             elif channel == "telegram" and s.telegram_bot_token:
+                payload = {"chat_id": to, "text": body, "disable_web_page_preview": True}
+                if reply_markup:
+                    payload["reply_markup"] = reply_markup
                 response = httpx.post(
                     f"https://api.telegram.org/bot{s.telegram_bot_token}/sendMessage",
-                    json={"chat_id": to, "text": body, "disable_web_page_preview": True},
+                    json=payload,
                     timeout=10,
                 )
                 response.raise_for_status()
@@ -62,5 +66,6 @@ def set_messenger(m: Messenger) -> None:
     messenger = m
 
 
-def send(db: Session, channel: str, to: str, body: str) -> str:
-    return messenger.send(db, channel, to, body)
+def send(db: Session, channel: str, to: str, body: str,
+         reply_markup: dict | None = None) -> str:
+    return messenger.send(db, channel, to, body, reply_markup=reply_markup)

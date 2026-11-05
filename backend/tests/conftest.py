@@ -28,7 +28,7 @@ class CaptureMessenger(Messenger):
     def __init__(self):
         self.sent = []
 
-    def send(self, db, channel, to, body):
+    def send(self, db, channel, to, body, reply_markup=None):
         self.sent.append((channel, to, body))
         return "captured"
 
