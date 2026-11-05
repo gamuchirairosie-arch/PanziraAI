@@ -35,8 +35,8 @@ Expected frontend evidence for this branch:
 Backend evidence:
 
 - The repository contains API tests for the human editor role, the four-check gate, AI non-publication, rejection, withdrawal, and cross-session persistence.
-- Run `python -m pytest -q` in `backend` on Linux CI or an approved local Python environment.
-- During this review, Windows Application Control blocked a downloaded SciPy DLL before test collection. Do not claim that the full backend suite passed locally until CI reports success.
+- Draft PR Linux CI completed the backend suite with 64 tests passing.
+- During this review, Windows Application Control blocked a downloaded SciPy DLL before local test collection. State that the full backend suite passed in Linux CI, not locally.
 
 ## Verified and proposed features
 
@@ -44,6 +44,7 @@ Backend evidence:
 | --- | --- | --- |
 | Browser demo workflow | Verified locally | Frontend tests and production build pass |
 | Four-check editorial gate | Implemented | Frontend gate tests and backend gate tests in the repository |
+| Backend test suite | Verified in draft PR CI | 64 tests passed; deprecation and short test-key warnings remain |
 | Hosted frontend | Verified reachable | Homepage returned HTTP 200 on 5 November 2026 |
 | Hosted backend | Not verified | Same-origin health and API routes returned 404 |
 | Shared persistence | Proposed deployment | Requires separate FastAPI service and durable database |
@@ -72,7 +73,7 @@ The infrastructure subtotal is US$315 to US$960 before team time, devices, data 
 - Reviewed code baseline: `gamuchirairosie-arch/PanziraAI` at commit `b69485aa120c376184b58bcefc295eb1ad8f689e`.
 - Public frontend observed at `https://panzira-ai.vercel.app/` on 5 November 2026.
 - Same-origin diagnostics observed on 5 November 2026: `/health`, `/api/public/alerts`, and `/api/v1/public/alerts` returned HTTP 404.
-- Branch evidence: the test commands and CI workflow in this repository. Replace local results with the draft PR's CI status when available.
+- Branch evidence: the test commands and successful frontend, backend, and database-artifact CI jobs in draft PR #1.
 
 ## 100 point judging alignment
 
@@ -80,7 +81,7 @@ The infrastructure subtotal is US$315 to US$960 before team time, devices, data 
 | --- | ---: | --- | --- |
 | Innovation and Creativity | 20 | Human gated AI intake, multilingual drafts, duplicate and location support | AI assists; it does not verify or publish |
 | Relevance to Media Challenges | 20 | Evidence handling and newsroom corroboration before public alerts | Current demo uses fictional incidents |
-| Technical Execution | 15 | Passing frontend tests, production build, API gate tests, CI workflow | Full backend suite awaits CI because local DLL loading was blocked |
+| Technical Execution | 15 | Passing frontend tests, production build, 64-test backend CI, static model and data-artifact guards | Dependency deprecation and short test-key warnings remain |
 | Feasibility and Sustainability | 15 | Separate deployment plan and 90 day cost assumptions | No hosted backend or verified customers yet |
 | Social Impact | 10 | Safer public communication design and privacy controls | No measured community outcome or adoption data supplied |
 | Scalability | 10 | Channel adapters, versioned API, durable database plan | Integrations have not been load tested or operated in production |
