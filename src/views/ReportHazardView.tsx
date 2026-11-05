@@ -50,7 +50,7 @@ const CATEGORY_OPTIONS: CategoryChoice[] = [
 ];
 
 export const ReportHazardView: React.FC = () => {
-  const { submitCitizenReport, navigatePublic, navigateNewsroom } = usePanzira();
+  const { submitCitizenReport, navigatePublic, navigateNewsroom, backendMode } = usePanzira();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [categoryKey, setCategoryKey] = useState<HazardCategoryKey>('potholes');
@@ -181,7 +181,7 @@ export const ReportHazardView: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
 
@@ -204,7 +204,7 @@ export const ReportHazardView: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const created = submitCitizenReport({
+      const created = await submitCitizenReport({
         categoryKey,
         categoryLabel: selectedCategoryObj.label,
         roadArea: roadArea.trim(),
@@ -225,6 +225,12 @@ export const ReportHazardView: React.FC = () => {
       setSubmittedReceipt(created);
       setStep(4);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      setValidationError(
+        error instanceof Error
+          ? error.message
+          : 'The report was not acknowledged. Please check the backend connection and try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -257,15 +263,18 @@ export const ReportHazardView: React.FC = () => {
                 Pending editorial review · Not published publicly
               </span>
               <h1 className="pz-page-title" style={{ marginTop: '6px', fontSize: '26px' }}>
-                Demo report received for verification
+                {backendMode === 'demo'
+                  ? 'Demo report stored in this browser'
+                  : 'Server acknowledged report for verification'}
               </h1>
             </div>
           </div>
 
           <p style={{ fontSize: '14.5px', color: 'var(--pz-muted)' }}>
-            Thank you. Your report has been queued in the Panzira AI Bulawayo newsroom inbox.
-            Automated intake structures incoming submissions to assist journalists, and{' '}
-            <strong>never automatically publishes road warnings</strong>.
+            {backendMode === 'demo'
+              ? 'This is a local simulation. The report was not sent to a backend, shared with a newsroom, or published.'
+              : 'The backend confirmed receipt and queued the report for newsroom review.'}{' '}
+            Automated intake assists journalists and <strong>never automatically publishes road warnings</strong>.
           </p>
 
           <div

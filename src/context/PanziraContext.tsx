@@ -21,7 +21,16 @@ import {
   formatHarareShortTime,
   validateObservedDateTime,
 } from '../utils/dateTime';
-import { apiService } from '../services/api';
+import {
+  apiService,
+  BackendHealthResult,
+  BackendMode,
+} from '../services/api';
+import {
+  commitAfterServerAcknowledgement,
+  errorMessage,
+  isFourCheckGateComplete,
+} from '../services/mutationPolicy';
 
 const STORAGE_KEY = 'panzira_ai_hackathon_demo_v1';
 
@@ -95,13 +104,17 @@ interface PanziraContextValue {
   setSelectedCorridorId: (id: 'A5' | 'KHAMI' | 'ESIGODINI') => void;
   lastSubmittedReceiptId: string | null;
 
+  // Runtime truth: server-backed or explicitly local-only
+  backendMode: BackendMode;
+  backendHealth: BackendHealthResult;
+
   // Editorial & Citizen Actions
-  submitCitizenReport: (input: NewCitizenReportInput) => SignalReport;
-  toggleChecklist: (signalId: string, field: keyof VerificationChecklist) => void;
-  updateEditorialNotes: (signalId: string, notes: string) => void;
-  requestEvidence: (signalId: string, note?: string) => void;
-  rejectSignal: (signalId: string, reason?: string) => void;
-  verifySignal: (signalId: string) => boolean;
+  submitCitizenReport: (input: NewCitizenReportInput) => Promise<SignalReport>;
+  toggleChecklist: (signalId: string, field: keyof VerificationChecklist) => Promise<boolean>;
+  updateEditorialNotes: (signalId: string, notes: string) => Promise<boolean>;
+  requestEvidence: (signalId: string, note?: string) => Promise<boolean>;
+  rejectSignal: (signalId: string, reason?: string) => Promise<boolean>;
+  verifySignal: (signalId: string) => Promise<boolean>;
 
   // Graphic safety (session-scoped reveal inside newsroom workspace only)
   revealedGraphicIds: Record<string, boolean>;
@@ -112,7 +125,7 @@ interface PanziraContextValue {
     key: K,
     value: WorkingBriefDraft[K]
   ) => void;
-  saveBriefDraft: () => void;
+  saveBriefDraft: () => Promise<boolean>;
   openWorkingBriefForSignal: (signalId: string) => void;
 
   // Toast / status feedback & demo reset
@@ -279,6 +292,20 @@ function pickCorridorCoords(roadArea: string, existingCount: number): { xPct: nu
 
 export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [persisted, setPersisted] = useState<PersistedState>(loadInitialPersistedState);
+  const runtime = apiService.getRuntime();
+  const [backendHealth, setBackendHealth] = useState<BackendHealthResult>(
+    runtime.mode === 'demo'
+      ? {
+          status: 'demo',
+          message: 'Local demo mode. Changes stay in this browser and are not published.',
+        }
+      : {
+          status: runtime.configured ? 'offline' : 'misconfigured',
+          message: runtime.configured
+            ? 'Backend connection has not been confirmed yet.'
+            : 'Server mode requires VITE_API_BASE_URL.',
+        }
+  );
 
   const [portal, setPortal] = useState<PortalMode>('newsroom');
   const [newsroomView, setNewsroomView] = useState<NewsroomView>('monitor');
@@ -333,50 +360,59 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => window.removeEventListener('hashchange', applyHash);
   }, []);
 
-  // Live Python Backend Synchronization & Periodic Polling
+  // Server synchronization runs only when server mode is explicitly configured.
   useEffect(() => {
+    if (runtime.mode === 'demo') return;
+
     let isMounted = true;
     const syncBackend = async (isInitial = false) => {
       try {
-        const isHealthy = await apiService.checkHealth();
-        if (!isHealthy || !isMounted) return;
+        const health = await apiService.checkHealth();
+        if (!isMounted) return;
+        setBackendHealth(health);
+        if (health.status !== 'online') return;
 
-        if (!apiService.getToken()) {
-          await apiService.login().catch(() => {});
-        }
-
-        const [liveSignals, liveAlerts, liveBrief] = await Promise.all([
-          apiService.fetchSignals().catch(() => null),
-          apiService.fetchPublicAlerts().catch(() => null),
-          apiService.fetchWorkingBrief().catch(() => null),
-        ]);
+        const liveAlerts = await apiService.fetchPublicAlerts();
+        const token = apiService.getToken();
+        const [liveSignals, liveBrief] = token
+          ? await Promise.all([apiService.fetchSignals(), apiService.fetchWorkingBrief()])
+          : [null, null];
 
         if (isMounted) {
           setPersisted((prev) => {
-            if (!liveSignals || liveSignals.length === 0) return prev;
             return {
               ...prev,
-              signals: liveSignals,
-              verifiedAlerts: liveAlerts && liveAlerts.length > 0 ? liveAlerts : prev.verifiedAlerts,
-              briefDraft: liveBrief ? liveBrief : prev.briefDraft,
+              signals: liveSignals ?? prev.signals,
+              verifiedAlerts: liveAlerts,
+              briefDraft: liveBrief ?? prev.briefDraft,
             };
           });
           if (isInitial) {
-            showToast('Live Python backend connected (SQLite database active).');
+            showToast(
+              token
+                ? 'Backend connection confirmed. Newsroom data was acknowledged by the server.'
+                : 'Backend health confirmed. Sign in to load or change newsroom records.'
+            );
           }
         }
-      } catch {
-        // Gracefully use local state if backend is offline
+      } catch (error) {
+        if (isMounted) {
+          setBackendHealth({
+            status: 'offline',
+            message: errorMessage(error, 'Backend synchronization failed.'),
+            checkedUrl: runtime.healthUrl,
+          });
+        }
       }
     };
 
     syncBackend(true);
-    const interval = setInterval(() => syncBackend(false), 4000);
+    const interval = setInterval(() => syncBackend(false), 15000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [runtime.healthUrl, runtime.mode]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -401,7 +437,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const submitCitizenReport = (input: NewCitizenReportInput): SignalReport => {
+  const submitCitizenReport = async (input: NewCitizenReportInput): Promise<SignalReport> => {
     // Defense-in-depth date/time validation & normalization
     const dateCheck = validateObservedDateTime(input.observedIso || input.reportedDateTime);
     const now = new Date();
@@ -526,32 +562,75 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       gpsReported: input.reportedLat !== undefined && input.reportedLng !== undefined,
     };
 
+    if (runtime.mode === 'server') {
+      try {
+        return await commitAfterServerAcknowledgement(
+          () => apiService.submitCitizenReport(input),
+          (serverSignal) => {
+            setPersisted((prev) => ({
+              ...prev,
+              signals: [
+                serverSignal,
+                ...prev.signals.filter((signal) => signal.id !== serverSignal.id),
+              ],
+            }));
+            setLastSubmittedReceiptId(serverSignal.id);
+            setSelectedMonitorId(serverSignal.id);
+            setSelectedInboxId(serverSignal.id);
+            setSelectedVerifyId(serverSignal.id);
+            showToast(
+              `Server acknowledged report ${serverSignal.id}. It is queued for editorial verification and is not public.`
+            );
+          }
+        );
+      } catch (error) {
+        showToast(
+          `Submission failed: ${errorMessage(error, 'the backend did not acknowledge the report')}. Nothing was queued.`
+        );
+        throw error;
+      }
+    }
+
     setPersisted((prev) => ({
       ...prev,
       signals: [newSignal, ...prev.signals],
     }));
-
-    // Asynchronously dispatch to Python ML intake backend
-    apiService
-      .submitCitizenReport(input)
-      .then((serverSig) => {
-        setPersisted((prev) => ({
-          ...prev,
-          signals: [serverSig, ...prev.signals.filter((s) => s.id !== newId)],
-        }));
-      })
-      .catch(() => {});
-
     setLastSubmittedReceiptId(newId);
     setSelectedMonitorId(newId);
     setSelectedInboxId(newId);
     setSelectedVerifyId(newId);
-    showToast(`Report ${newId} queued for editorial verification (not published publicly).`);
+    showToast(
+      `Demo-only report ${newId} stored in this browser. It was not sent to a server or published.`
+    );
     return newSignal;
   };
 
-  const toggleChecklist = (signalId: string, field: keyof VerificationChecklist) => {
-    apiService.toggleChecklist(signalId, field).catch(() => {});
+  const toggleChecklist = async (
+    signalId: string,
+    field: keyof VerificationChecklist
+  ): Promise<boolean> => {
+    if (runtime.mode === 'server') {
+      try {
+        await commitAfterServerAcknowledgement(
+          () => apiService.toggleChecklist(signalId, field),
+          (serverSignal) => {
+            setPersisted((prev) => ({
+              ...prev,
+              signals: prev.signals.map((signal) =>
+                signal.id === signalId ? serverSignal : signal
+              ),
+            }));
+          }
+        );
+        return true;
+      } catch (error) {
+        showToast(
+          `Checklist change failed: ${errorMessage(error, 'the backend did not acknowledge it')}. The check was not changed.`
+        );
+        return false;
+      }
+    }
+
     setPersisted((prev) => ({
       ...prev,
       signals: prev.signals.map((sig) => {
@@ -562,13 +641,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         const metCount = Object.values(nextChecklist).filter(Boolean).length;
         const nextStage: 1 | 2 | 3 | 4 =
-          sig.workflowStatus === 'verified'
-            ? 4
-            : metCount === 4
-              ? 4
-              : metCount > 0
-                ? 3
-                : sig.pipelineStage;
+          sig.workflowStatus === 'verified' ? 4 : metCount > 0 ? 3 : sig.pipelineStage;
         const nextWorkflow =
           sig.workflowStatus === 'lead' && metCount > 0 ? 'verifying' : sig.workflowStatus;
 
@@ -586,20 +659,67 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       }),
     }));
+    return true;
   };
 
-  const updateEditorialNotes = (signalId: string, notes: string) => {
-    apiService.updateNotes(signalId, notes).catch(() => {});
+  const updateEditorialNotes = async (signalId: string, notes: string): Promise<boolean> => {
+    if (runtime.mode === 'server') {
+      try {
+        await commitAfterServerAcknowledgement(
+          () => apiService.updateNotes(signalId, notes),
+          (serverSignal) => {
+            setPersisted((prev) => ({
+              ...prev,
+              signals: prev.signals.map((signal) =>
+                signal.id === signalId ? serverSignal : signal
+              ),
+            }));
+          }
+        );
+        showToast(`Server saved editorial notes for ${signalId}.`);
+        return true;
+      } catch (error) {
+        showToast(
+          `Notes were not saved: ${errorMessage(error, 'the backend did not acknowledge them')}.`
+        );
+        return false;
+      }
+    }
+
     setPersisted((prev) => ({
       ...prev,
       signals: prev.signals.map((sig) =>
         sig.id === signalId ? { ...sig, editorialNotes: notes } : sig
       ),
     }));
+    showToast(`Demo-only notes for ${signalId} stored in this browser.`);
+    return true;
   };
 
-  const requestEvidence = (signalId: string, note?: string) => {
-    apiService.requestEvidence(signalId, note).catch(() => {});
+  const requestEvidence = async (signalId: string, note?: string): Promise<boolean> => {
+    if (runtime.mode === 'server') {
+      try {
+        await commitAfterServerAcknowledgement(
+          () => apiService.requestEvidence(signalId, note),
+          (serverSignal) => {
+            setPersisted((prev) => ({
+              ...prev,
+              signals: prev.signals.map((signal) =>
+                signal.id === signalId ? serverSignal : signal
+              ),
+            }));
+          }
+        );
+        showToast(`Server logged the evidence request for ${signalId}.`);
+        return true;
+      } catch (error) {
+        showToast(
+          `Evidence request failed: ${errorMessage(error, 'the backend did not acknowledge it')}.`
+        );
+        return false;
+      }
+    }
+
     const stamp = formatHarareDateTime(new Date());
     setPersisted((prev) => ({
       ...prev,
@@ -624,11 +744,34 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       }),
     }));
-    showToast(`Follow-up evidence request logged for ${signalId}.`);
+    showToast(`Demo-only evidence request for ${signalId} stored in this browser.`);
+    return true;
   };
 
-  const rejectSignal = (signalId: string, reason?: string) => {
-    apiService.rejectSignal(signalId, reason).catch(() => {});
+  const rejectSignal = async (signalId: string, reason?: string): Promise<boolean> => {
+    if (runtime.mode === 'server') {
+      try {
+        await commitAfterServerAcknowledgement(
+          () => apiService.rejectSignal(signalId, reason),
+          (serverSignal) => {
+            setPersisted((prev) => ({
+              ...prev,
+              signals: prev.signals.map((signal) =>
+                signal.id === signalId ? serverSignal : signal
+              ),
+            }));
+          }
+        );
+        showToast(`Server confirmed that ${signalId} was rejected and withheld.`);
+        return true;
+      } catch (error) {
+        showToast(
+          `Rejection failed: ${errorMessage(error, 'the backend did not acknowledge it')}. The signal was not changed.`
+        );
+        return false;
+      }
+    }
+
     const stamp = formatHarareDateTime(new Date());
     setPersisted((prev) => ({
       ...prev,
@@ -652,13 +795,14 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       }),
     }));
-    showToast(`Signal ${signalId} archived as uncorroborated / rejected.`);
+    showToast(`Demo-only rejection for ${signalId} stored in this browser.`);
+    return true;
   };
 
-  const verifySignal = (signalId: string): boolean => {
+  const verifySignal = async (signalId: string): Promise<boolean> => {
     const target = persisted.signals.find((s) => s.id === signalId);
     if (!target) return false;
-    const allChecked = Object.values(target.checklist).every(Boolean);
+    const allChecked = isFourCheckGateComplete(target.checklist);
     if (!allChecked) {
       showToast(
         'Editor approval gate: Complete all 4 independent verification checks before verifying.'
@@ -666,16 +810,55 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return false;
     }
 
+    if (runtime.mode === 'server') {
+      try {
+        await commitAfterServerAcknowledgement(
+          async () => {
+            const serverSignal = await apiService.verifySignal(signalId);
+            const serverAlerts = await apiService.fetchPublicAlerts();
+            const publishedAlert = serverAlerts.find(
+              (alert) => alert.sourceSignalId === signalId
+            );
+            if (serverSignal.workflowStatus !== 'verified' || !publishedAlert) {
+              throw new Error(
+                'The backend response did not confirm both verification and public-alert persistence.'
+              );
+            }
+            return { serverSignal, serverAlerts, publishedAlert };
+          },
+          ({ serverSignal, serverAlerts, publishedAlert }) => {
+            setPersisted((prev) => ({
+              ...prev,
+              lastEditorialUpdateIso: publishedAlert.approvedAtIso,
+              lastEditorialUpdateTime: publishedAlert.approvedAtReadable,
+              lastEditorialUpdateDateLabel: `Server-confirmed approval ${publishedAlert.approvedAtReadable} (${signalId}) · 0 AI auto-published alerts`,
+              signals: prev.signals.map((signal) =>
+                signal.id === signalId ? serverSignal : signal
+              ),
+              verifiedAlerts: serverAlerts,
+            }));
+          }
+        );
+        showToast(
+          `Backend confirmed the 4-check editor approval and persisted public alert for ${signalId}.`
+        );
+        return true;
+      } catch (error) {
+        showToast(
+          `Approval was not confirmed: ${errorMessage(error, 'the backend did not acknowledge publication')}. No local public alert was added. If the request may have reached the server, refresh before retrying.`
+        );
+        return false;
+      }
+    }
+
     const approvedNow = new Date();
     const readableApproval = formatHarareDateTime(approvedNow);
     const shortApprovalTime = `${formatHarareShortTime(approvedNow)} CAT`;
 
-    apiService.verifySignal(signalId).catch(() => {});
-
     setPersisted((prev) => {
       const alreadyPublished = prev.verifiedAlerts.some((a) => a.sourceSignalId === signalId);
       const newPublicAlert: VerifiedPublicAlert = {
-        id: `PZ-PUB-${signalId}`,
+        id: `PZ-DEMO-PUB-${signalId}`,
         sourceSignalId: signalId,
         title: target.inboxTitle || target.title,
         location: `${target.roadArea}${target.landmark ? ` (${target.landmark})` : ''}`,
@@ -693,12 +876,12 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         approvedAtIso: approvedNow.toISOString(),
         approvedAtReadable: readableApproval,
         // Graphic images are strictly withheld from public alerts even after verification
-        description: `${target.categoryLabel}: Independently corroborated road hazard at ${target.roadArea} (${target.landmark}).${
+        description: `Demo-only simulated alert. ${target.categoryLabel}: Independently corroborated road hazard at ${target.roadArea} (${target.landmark}).${
           target.isGraphicImage
             ? ' Submitted scene imagery withheld under Panzira editorial graphic-safety policy.'
             : ''
         }`,
-        sourceAttribution: `Independently corroborated (4/4 editorial checks) · Approved by Rudo Moyo on ${readableApproval}`,
+        sourceAttribution: `Local demo simulation · 4/4 editorial checks · Simulated approval by Rudo Moyo on ${readableApproval}`,
         lat: target.gpsReported ? target.reportedLat : undefined,
         lng: target.gpsReported ? target.reportedLng : undefined,
         desktopPin: {
@@ -717,7 +900,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         lastEditorialUpdateIso: approvedNow.toISOString(),
         lastEditorialUpdateTime: shortApprovalTime,
-        lastEditorialUpdateDateLabel: `Approved ${readableApproval} (${signalId}) · 0 AI auto-published alerts`,
+        lastEditorialUpdateDateLabel: `Demo-only simulated approval ${readableApproval} (${signalId}) · 0 AI auto-published alerts`,
         signals: prev.signals.map((sig) => {
           if (sig.id !== signalId) return sig;
           return {
@@ -733,7 +916,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
               {
                 time: readableApproval,
                 description:
-                  'Independently verified (4/4 checks) and approved for public alert by Editor Rudo Moyo.',
+                  'Demo-only simulation: 4/4 checks completed and a local alert preview created. Nothing was published or sent.',
               },
             ],
           };
@@ -745,9 +928,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
 
     showToast(
-      `Verified & approved by human editor: ${signalId} is now live on the Public Dashboard${
-        target.isGraphicImage ? ' (graphic media withheld from public view)' : ''
-      }.`
+      `Demo-only approval simulated for ${signalId}. A browser-local alert preview was created; no server, public feed, or integration was contacted.`
     );
     return true;
   };
@@ -772,9 +953,27 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   };
 
-  const saveBriefDraft = () => {
+  const saveBriefDraft = async (): Promise<boolean> => {
     const stamp = formatHarareDateTime(new Date());
-    apiService.saveWorkingBrief(persisted.briefDraft).catch(() => {});
+
+    if (runtime.mode === 'server') {
+      try {
+        await commitAfterServerAcknowledgement(
+          () => apiService.saveWorkingBrief(persisted.briefDraft),
+          (serverBrief) => {
+            setPersisted((prev) => ({ ...prev, briefDraft: serverBrief }));
+          }
+        );
+        showToast('Server acknowledged the investigative brief draft.');
+        return true;
+      } catch (error) {
+        showToast(
+          `Brief was not saved: ${errorMessage(error, 'the backend did not acknowledge it')}.`
+        );
+        return false;
+      }
+    }
+
     setPersisted((prev) => ({
       ...prev,
       briefDraft: {
@@ -782,7 +981,8 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         lastSavedAt: `Saved ${stamp} (local demo draft)`,
       },
     }));
-    showToast('Working investigative brief saved to local newsroom draft.');
+    showToast('Demo-only brief draft stored in this browser.');
+    return true;
   };
 
   const openWorkingBriefForSignal = (signalId: string) => {
@@ -892,6 +1092,8 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedCorridorId,
         setSelectedCorridorId,
         lastSubmittedReceiptId,
+        backendMode: runtime.mode,
+        backendHealth,
         submitCitizenReport,
         toggleChecklist,
         updateEditorialNotes,

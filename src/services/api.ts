@@ -12,19 +12,30 @@ import {
 } from '../types';
 import { NewCitizenReportInput } from '../context/PanziraContext';
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
-  (typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/api'
-    : '/api');
+export type BackendMode = 'demo' | 'server';
+export type BackendHealthStatus = 'demo' | 'online' | 'offline' | 'misconfigured';
 
-const HEALTH_URL =
-  (import.meta.env.VITE_HEALTH_URL as string | undefined) ||
-  (typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/health'
-    : '/health');
+export interface BackendHealthResult {
+  status: BackendHealthStatus;
+  message: string;
+  checkedUrl?: string;
+}
+
+const configuredMode = (import.meta.env.VITE_BACKEND_MODE as string | undefined)?.toLowerCase();
+const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
+const configuredHealthUrl = (import.meta.env.VITE_HEALTH_URL as string | undefined)?.replace(/\/$/, '');
+
+export const backendRuntime = {
+  mode: (configuredMode === 'server' ? 'server' : 'demo') as BackendMode,
+  apiBase: configuredApiBase || '',
+  healthUrl:
+    configuredHealthUrl ||
+    (configuredApiBase ? `${configuredApiBase.replace(/\/api$/, '')}/health` : ''),
+  configured: configuredMode !== 'server' || Boolean(configuredApiBase),
+};
+
+const API_BASE = backendRuntime.apiBase;
+const HEALTH_URL = backendRuntime.healthUrl;
 
 export interface NewsSourceRecord {
   id: number;
@@ -62,15 +73,28 @@ class ApiService {
   private token: string | null = null;
 
   constructor() {
-    this.token = localStorage.getItem('panzira_auth_token');
+    this.token = typeof localStorage === 'undefined' ? null : localStorage.getItem('panzira_auth_token');
+  }
+
+  getRuntime() {
+    return backendRuntime;
+  }
+
+  private requireServerConfiguration() {
+    if (backendRuntime.mode !== 'server') {
+      throw new Error('This action is running in local demo mode and was not sent to a server.');
+    }
+    if (!backendRuntime.configured || !API_BASE) {
+      throw new Error('Server mode requires VITE_API_BASE_URL. No request was sent.');
+    }
   }
 
   setToken(t: string | null) {
     this.token = t;
     if (t) {
-      localStorage.setItem('panzira_auth_token', t);
+      if (typeof localStorage !== 'undefined') localStorage.setItem('panzira_auth_token', t);
     } else {
-      localStorage.removeItem('panzira_auth_token');
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('panzira_auth_token');
     }
   }
 
@@ -85,17 +109,50 @@ class ApiService {
     return headers;
   }
 
-  async checkHealth(): Promise<boolean> {
+  async checkHealth(): Promise<BackendHealthResult> {
+    if (backendRuntime.mode === 'demo') {
+      return {
+        status: 'demo',
+        message: 'Local demo mode. Changes stay in this browser and no backend requests are sent.',
+      };
+    }
+    if (!backendRuntime.configured || !HEALTH_URL) {
+      return {
+        status: 'misconfigured',
+        message: 'Server mode is enabled but VITE_API_BASE_URL is missing.',
+      };
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
-      const res = await fetch(HEALTH_URL, { method: 'GET' });
-      return res.ok;
-    } catch {
-      return false;
+      const res = await fetch(HEALTH_URL, { method: 'GET', signal: controller.signal });
+      if (!res.ok) {
+        return {
+          status: 'offline',
+          message: `Backend health check returned HTTP ${res.status}.`,
+          checkedUrl: HEALTH_URL,
+        };
+      }
+      return {
+        status: 'online',
+        message: 'Backend health check succeeded.',
+        checkedUrl: HEALTH_URL,
+      };
+    } catch (error) {
+      return {
+        status: 'offline',
+        message: error instanceof Error ? error.message : 'Backend health check failed.',
+        checkedUrl: HEALTH_URL,
+      };
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
   // --- Authentication ---
-  async login(email = 'rudo.moyo@panzira.org', password = 'panzira_editor_2025') {
+  async login(email: string, password: string) {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -109,18 +166,21 @@ class ApiService {
 
   // --- Public APIs ---
   async fetchPublicAlerts(): Promise<VerifiedPublicAlert[]> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/public/alerts`);
     if (!res.ok) throw new Error('Failed to load public alerts');
     return res.json();
   }
 
   async fetchCorridors(): Promise<CorridorWatchItem[]> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/public/corridors`);
     if (!res.ok) throw new Error('Failed to load corridors');
     return res.json();
   }
 
   async submitCitizenReport(input: NewCitizenReportInput): Promise<SignalReport> {
+    this.requireServerConfiguration();
     const payload = {
       categoryKey: input.categoryKey,
       categoryLabel: input.categoryLabel,
@@ -154,6 +214,7 @@ class ApiService {
 
   // --- Newsroom APIs (Journalist & Editor) ---
   async fetchSignals(): Promise<SignalReport[]> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/signals`, {
       headers: this.getHeaders(),
     });
@@ -165,6 +226,7 @@ class ApiService {
     signalId: string,
     field: keyof VerificationChecklist
   ): Promise<SignalReport> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/signals/${signalId}/checklist`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -175,6 +237,7 @@ class ApiService {
   }
 
   async updateNotes(signalId: string, notes: string): Promise<SignalReport> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/signals/${signalId}/notes`, {
       method: 'PUT',
       headers: this.getHeaders(),
@@ -185,6 +248,7 @@ class ApiService {
   }
 
   async requestEvidence(signalId: string, note?: string): Promise<SignalReport> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/signals/${signalId}/request-evidence`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -195,6 +259,7 @@ class ApiService {
   }
 
   async rejectSignal(signalId: string, reason?: string): Promise<SignalReport> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/signals/${signalId}/reject`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -205,6 +270,7 @@ class ApiService {
   }
 
   async verifySignal(signalId: string): Promise<SignalReport> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/signals/${signalId}/verify`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -218,6 +284,7 @@ class ApiService {
 
   // --- Investigative Briefs ---
   async fetchWorkingBrief(): Promise<WorkingBriefDraft> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/briefs`, {
       headers: this.getHeaders(),
     });
@@ -226,6 +293,7 @@ class ApiService {
   }
 
   async saveWorkingBrief(brief: Partial<WorkingBriefDraft>): Promise<WorkingBriefDraft> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/briefs`, {
       method: 'PUT',
       headers: this.getHeaders(),
@@ -237,6 +305,7 @@ class ApiService {
 
   // --- Audit Trail ---
   async fetchAuditLogs(): Promise<any[]> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE}/newsroom/audit-logs`, {
       headers: this.getHeaders(),
     });
@@ -245,6 +314,7 @@ class ApiService {
   }
 
   async fetchIntegrationStatus(): Promise<IntegrationStatusRecord> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/integrations/status`, {
       headers: this.getHeaders(false),
     });
@@ -253,6 +323,7 @@ class ApiService {
   }
 
   async fetchNewsSources(): Promise<NewsSourceRecord[]> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources`, {
       headers: this.getHeaders(false),
     });
@@ -261,6 +332,7 @@ class ApiService {
   }
 
   async fetchCollectionRuns(): Promise<CollectionRunRecord[]> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources/runs`, {
       headers: this.getHeaders(false),
     });
@@ -269,6 +341,7 @@ class ApiService {
   }
 
   async addNewsSource(input: { name: string; feedUrl: string; basis: string; pollIntervalMinutes: number }): Promise<NewsSourceRecord> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources`, {
       method: 'POST', headers: this.getHeaders(), body: JSON.stringify(input),
     });
@@ -280,6 +353,7 @@ class ApiService {
   }
 
   async setNewsSourceActive(id: number, active: boolean): Promise<NewsSourceRecord> {
+    this.requireServerConfiguration();
     const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources/${id}`, {
       method: 'PATCH', headers: this.getHeaders(), body: JSON.stringify({ active }),
     });
@@ -288,6 +362,7 @@ class ApiService {
   }
 
   async collectNewsSources(id?: number): Promise<void> {
+    this.requireServerConfiguration();
     const path = id === undefined ? 'news-sources/collect' : `news-sources/${id}/collect`;
     const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/${path}`, {
       method: 'POST', headers: this.getHeaders(false),

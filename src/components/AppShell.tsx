@@ -19,6 +19,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     toastMessage,
     dismissToast,
     resetDemoData,
+    backendMode,
+    backendHealth,
   } = usePanzira();
 
   const [bellOpen, setBellOpen] = useState(false);
@@ -70,7 +72,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <div className="pz-demo-banner-content">
           <strong>Demonstration scenario</strong>
           <span>
-            Fictional Bulawayo incidents. Every report stays unverified until a human editor approves it.
+            {backendMode === 'demo'
+              ? 'Local demo only. Changes stay in this browser and are not submitted or published.'
+              : backendHealth.status === 'online'
+                ? 'Server-backed mode. Success appears only after backend acknowledgement.'
+                : `Server mode unavailable. ${backendHealth.message}`}
           </span>
         </div>
         <span style={{ fontSize: '11px', opacity: 0.85, whiteSpace: 'nowrap' }}>
@@ -99,7 +105,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             {newsroomView === 'fleet' ? 'Fleet desk' : 'Newsroom'}
           </span>
 
-          <span className="pz-demo-pill">Demo</span>
+          <span className="pz-demo-pill">
+            {backendMode === 'demo' ? 'Local demo' : backendHealth.status === 'online' ? 'Server' : 'Offline'}
+          </span>
 
           <div className="pz-masthead-search">
             <img src={ASSETS.search} alt="" style={{ width: '16px', height: '16px' }} />
@@ -179,8 +187,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 <p style={{ fontSize: '12.5px', color: 'var(--pz-muted)', lineHeight: 1.5 }}>
                   • <strong>{awaitingReviewCount}</strong> submissions awaiting human corroboration.
                   <br />• <strong>0</strong> alerts auto-published by AI (human gate enforced).
-                  <br />• Fictional demo dataset stored in local browser storage; no live social
-                  scraping or backend auth is connected.
+                  <br />• {backendHealth.message}
                 </p>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                   <button

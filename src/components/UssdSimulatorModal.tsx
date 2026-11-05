@@ -8,7 +8,7 @@ interface UssdSimulatorModalProps {
 }
 
 export const UssdSimulatorModal: React.FC<UssdSimulatorModalProps> = ({ isOpen, onClose }) => {
-  const { submitCitizenReport, navigateNewsroom } = usePanzira();
+  const { submitCitizenReport, navigateNewsroom, backendMode } = usePanzira();
 
   const [step, setStep] = useState<number>(1);
   const [userInput, setUserInput] = useState<string>('');
@@ -21,7 +21,7 @@ export const UssdSimulatorModal: React.FC<UssdSimulatorModalProps> = ({ isOpen, 
 
   if (!isOpen) return null;
 
-  const handleSendInput = (e: React.FormEvent) => {
+  const handleSendInput = async (e: React.FormEvent) => {
     e.preventDefault();
     const val = userInput.trim();
     setErrorMsg(null);
@@ -98,21 +98,29 @@ export const UssdSimulatorModal: React.FC<UssdSimulatorModalProps> = ({ isOpen, 
     if (step === 4) {
       if (val === '1') {
         // Complete USSD submission!
-        const created = submitCitizenReport({
-          categoryKey: selectedCategoryKey,
-          categoryLabel: selectedCategoryLabel,
-          roadArea: selectedCorridor,
-          landmark: selectedLandmark,
-          description: `USSD *140# submission: ${selectedCategoryLabel} along ${selectedCorridor} near ${selectedLandmark}. (Low-bandwidth citizen input).`,
-          reportedDateTime: '04 Nov 2026, 16:35',
-          observedIso: new Date().toISOString(),
-          language: 'English',
-          photoType: 'none',
-        });
+        try {
+          const created = await submitCitizenReport({
+            categoryKey: selectedCategoryKey,
+            categoryLabel: selectedCategoryLabel,
+            roadArea: selectedCorridor,
+            landmark: selectedLandmark,
+            description: `USSD *140# submission: ${selectedCategoryLabel} along ${selectedCorridor} near ${selectedLandmark}. (Low-bandwidth citizen input).`,
+            reportedDateTime: '04 Nov 2026, 16:35',
+            observedIso: new Date().toISOString(),
+            language: 'English',
+            photoType: 'none',
+          });
 
-        setReceiptId(created.id);
-        setStep(5);
-        setUserInput('');
+          setReceiptId(created.id);
+          setStep(5);
+          setUserInput('');
+        } catch (error) {
+          setErrorMsg(
+            error instanceof Error
+              ? error.message
+              : 'The backend did not acknowledge this simulated USSD report.'
+          );
+        }
       } else if (val === '2') {
         onClose();
       } else {
@@ -269,12 +277,15 @@ export const UssdSimulatorModal: React.FC<UssdSimulatorModalProps> = ({ isOpen, 
 
             {step === 5 && (
               <>
-                <div>--- REPORT CONFIRMED ---</div>
+                <div>--- {backendMode === 'demo' ? 'DEMO RECEIPT' : 'SERVER ACKNOWLEDGED'} ---</div>
                 <div>Reference ID: {receiptId}</div>
                 <div>Status: Queued for review</div>
                 <br />
-                <div>Your report was received by the Bulawayo newsroom desk.</div>
-                <div>Free SMS receipt sent.</div>
+                <div>
+                  {backendMode === 'demo'
+                    ? 'Stored only in this browser. No USSD or SMS network was contacted.'
+                    : 'The backend confirmed receipt for newsroom review.'}
+                </div>
               </>
             )}
 

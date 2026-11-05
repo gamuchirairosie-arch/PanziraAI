@@ -568,12 +568,14 @@ export const IncidentVerificationView: React.FC = () => {
     openWorkingBriefForSignal,
     revealedGraphicIds,
     toggleGraphicReveal,
+    backendMode,
   } = usePanzira();
 
   const [compareModalOpen, setCompareModalOpen] = useState(false);
   const [followUpInputOpen, setFollowUpInputOpen] = useState(false);
   const [followUpPrompt, setFollowUpPrompt] = useState('');
   const [showAdvancedAi, setShowAdvancedAi] = useState(false);
+  const [editorialNotesDraft, setEditorialNotesDraft] = useState('');
 
   const signal = useMemo(() => {
     return signals.find((s) => s.id === selectedVerifyId) || signals[0];
@@ -585,10 +587,15 @@ export const IncidentVerificationView: React.FC = () => {
   );
   const allChecksComplete = metCount === 4;
 
-  const handleSendFollowUp = () => {
-    requestEvidence(signal.id, followUpPrompt);
-    setFollowUpPrompt('');
-    setFollowUpInputOpen(false);
+  useEffect(() => {
+    setEditorialNotesDraft(signal.editorialNotes);
+  }, [signal.editorialNotes, signal.id]);
+
+  const handleSendFollowUp = async () => {
+    if (await requestEvidence(signal.id, followUpPrompt)) {
+      setFollowUpPrompt('');
+      setFollowUpInputOpen(false);
+    }
   };
 
   return (
@@ -1034,11 +1041,11 @@ export const IncidentVerificationView: React.FC = () => {
                     aria-checked={isChecked}
                     tabIndex={0}
                     className="pz-checklist-row"
-                    onClick={() => toggleChecklist(signal.id, item.key)}
+                    onClick={() => void toggleChecklist(signal.id, item.key)}
                     onKeyDown={(e) => {
                       if (e.key === ' ' || e.key === 'Enter') {
                         e.preventDefault();
-                        toggleChecklist(signal.id, item.key);
+                        void toggleChecklist(signal.id, item.key);
                       }
                     }}
                   >
@@ -1074,10 +1081,16 @@ export const IncidentVerificationView: React.FC = () => {
               <textarea
                 id="pz-editor-notes"
                 className="pz-textarea"
-                value={signal.editorialNotes}
-                onChange={(e) => updateEditorialNotes(signal.id, e.target.value)}
+                value={editorialNotesDraft}
+                onChange={(e) => setEditorialNotesDraft(e.target.value)}
+                onBlur={() => void updateEditorialNotes(signal.id, editorialNotesDraft)}
                 placeholder="Record witness calls, road authority responses, kilometre markers, or translation checks..."
               />
+              <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
+                {backendMode === 'demo'
+                  ? 'Demo only: notes stay in this browser.'
+                  : 'Notes are saved only after the server acknowledges them when this field loses focus.'}
+              </span>
             </div>
 
             {/* Optional Follow-Up Evidence Prompt */}
@@ -1142,7 +1155,7 @@ export const IncidentVerificationView: React.FC = () => {
                 type="button"
                 className="pz-btn-secondary"
                 style={{ color: 'var(--pz-red)', borderColor: 'var(--pz-border)' }}
-                onClick={() => rejectSignal(signal.id)}
+                onClick={() => void rejectSignal(signal.id)}
               >
                 Reject
               </button>
@@ -1153,17 +1166,23 @@ export const IncidentVerificationView: React.FC = () => {
                 className="pz-btn-primary"
                 style={{ flex: 1, minWidth: '180px' }}
                 disabled={!allChecksComplete || signal.workflowStatus === 'verified'}
-                onClick={() => verifySignal(signal.id)}
+                onClick={() => void verifySignal(signal.id)}
                 title={
                   allChecksComplete
-                    ? 'Approve verified public road alert'
+                    ? backendMode === 'demo'
+                      ? 'Simulate approval locally; nothing will be published'
+                      : 'Request server-confirmed approval and public alert persistence'
                     : 'Complete all 4 verification checklist items to unlock Verify'
                 }
               >
                 {signal.workflowStatus === 'verified'
-                  ? '✓ Verified & published'
+                  ? backendMode === 'demo'
+                    ? 'Demo approval simulated'
+                    : 'Server verified & published'
                   : allChecksComplete
-                    ? 'Verify & approve alert'
+                    ? backendMode === 'demo'
+                      ? 'Simulate approval locally'
+                      : 'Verify & approve alert'
                     : `Verify (${4 - metCount} check${4 - metCount === 1 ? '' : 's'} remaining)`}
               </button>
             </div>

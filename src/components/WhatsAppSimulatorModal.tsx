@@ -19,7 +19,7 @@ export const WhatsAppSimulatorModal: React.FC<WhatsAppSimulatorModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { submitCitizenReport, navigateNewsroom } = usePanzira();
+  const { submitCitizenReport, navigateNewsroom, backendMode } = usePanzira();
 
   const [step, setStep] = useState<number>(1);
   const [categoryKey, setCategoryKey] = useState<HazardCategoryKey>('potholes');
@@ -121,34 +121,48 @@ export const WhatsAppSimulatorModal: React.FC<WhatsAppSimulatorModalProps> = ({
     ]);
   };
 
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     setStep(6);
 
-    const created = submitCitizenReport({
-      categoryKey,
-      categoryLabel,
-      roadArea,
-      landmark,
-      description: description || 'Hazard observed by citizen via WhatsApp conversation.',
-      reportedDateTime: '04 Nov 2026, 16:30',
-      observedIso: new Date().toISOString(),
-      language: 'English',
-      photoType: hasPhoto ? 'figma-road-damage' : 'none',
-      photoFilename: hasPhoto ? 'whatsapp_intake.jpg' : undefined,
-    });
+    try {
+      const created = await submitCitizenReport({
+        categoryKey,
+        categoryLabel,
+        roadArea,
+        landmark,
+        description: description || 'Hazard observed by citizen via WhatsApp conversation.',
+        reportedDateTime: '04 Nov 2026, 16:30',
+        observedIso: new Date().toISOString(),
+        language: 'English',
+        photoType: hasPhoto ? 'figma-road-damage' : 'none',
+        photoFilename: hasPhoto ? 'whatsapp_intake.jpg' : undefined,
+      });
 
-    setReceiptId(created.id);
-
-    setMessages((prev) => [
-      ...prev,
-      { id: `u-${Date.now()}`, sender: 'user', text: 'YES, I consent', time: nowTime() },
-      {
-        id: `b-${Date.now()}`,
-        sender: 'bot',
-        text: `✅ Report received successfully!\n\nReference ID: *${created.id}*\nStatus: *Pending Editorial Review*\n\nOur human verification desk will investigate before publishing to the public map. Thank you for keeping Bulawayo roads safe!`,
-        time: nowTime(),
-      },
-    ]);
+      setReceiptId(created.id);
+      setMessages((prev) => [
+        ...prev,
+        { id: `u-${Date.now()}`, sender: 'user', text: 'YES, I consent', time: nowTime() },
+        {
+          id: `b-${Date.now()}`,
+          sender: 'bot',
+          text:
+            backendMode === 'demo'
+              ? `DEMO ONLY: Report ${created.id} was stored in this browser. It was not sent through WhatsApp, saved to a backend, or published.`
+              : `Server acknowledged report ${created.id}. Status: Pending Editorial Review. Nothing has been published.`,
+          time: nowTime(),
+        },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `b-${Date.now()}`,
+          sender: 'bot',
+          text: `Submission failed. ${error instanceof Error ? error.message : 'The backend did not acknowledge the report.'}`,
+          time: nowTime(),
+        },
+      ]);
+    }
   };
 
   const handleReset = () => {

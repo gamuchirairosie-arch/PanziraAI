@@ -30,8 +30,11 @@ backend/.env.*
 
 # Databases & local data
 *.db
+*.db.bak
 *.sqlite
 *.sqlite3
+*.sqlite.bak
+*.sqlite3.bak
 data/evidence/
 
 # Archive zips
