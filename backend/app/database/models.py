@@ -138,9 +138,6 @@ class SignalReport(Base, FlexModel):
     reportedLat = Column("reported_lat", Float, nullable=True)
     reportedLng = Column("reported_lng", Float, nullable=True)
     gpsReported = Column("gps_reported", Boolean, default=False, nullable=False)
-    reportedLat = Column("reported_lat", Float, nullable=True)
-    reportedLng = Column("reported_lng", Float, nullable=True)
-    gpsReported = Column("gps_reported", Boolean, default=False, nullable=False)
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -195,9 +192,6 @@ class SignalReport(Base, FlexModel):
     reported_lat = synonym("reportedLat")
     reported_lng = synonym("reportedLng")
     gps_reported = synonym("gpsReported")
-    reported_lat = synonym("reportedLat")
-    reported_lng = synonym("reportedLng")
-    gps_reported = synonym("gpsReported")
 
     public_alert = relationship("VerifiedPublicAlert", back_populates="signal", uselist=False, cascade="all, delete-orphan")
 
@@ -224,8 +218,6 @@ class VerifiedPublicAlert(Base, FlexModel):
     description = Column(Text, nullable=False)
     sourceAttribution = Column("source_attribution", String(500), nullable=False)
     desktopPin = Column("desktop_pin", JSON, nullable=False)
-    lat = Column(Float, nullable=True)
-    lng = Column(Float, nullable=True)
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
     
