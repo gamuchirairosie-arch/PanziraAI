@@ -19,7 +19,9 @@ Configure `WA_VERIFY_TOKEN`, `WA_APP_SECRET`, `WA_ACCESS_TOKEN`, and `WA_PHONE_N
 
 Create a bot with Telegram's BotFather. Set `TELEGRAM_BOT_TOKEN` and a random `TELEGRAM_WEBHOOK_SECRET` (1–256 characters, using Telegram's supported header-token characters). Set the webhook to `https://<backend-host>/api/v1/webhooks/telegram` with that secret token. Set `VITE_TELEGRAM_BOT_USERNAME` to the bot username (without `@`) for the public report button. `TELEGRAM_EDITOR_CHAT_ID` receives new lead notices; `TELEGRAM_ALERT_CHAT_ID` is the destination for editor-approved public alerts. The bot handles private chats only, requests explicit consent, and supports text, photos, and location pins. Users can send `/stop` to withdraw consent.
 
-Telegram retries are deduplicated by `update_id`; only that numeric identifier is retained before consent, never the unconsented message payload. Reports appear in the journalist inbox as opt-in, unverified leads. Telegram API response failures are recorded in the outbox as failed, while a photo-download failure leaves the text or caption lead available for manual review.
+The public button opens `https://t.me/PanziraBot?start=report`. After consent, the bot asks for hazard type, road/area, exact landmark, observation time, description, and optional photo/location evidence. `SUBMIT` files the report; `/cancel` discards the current draft, `/report` starts a new one, and `/stop` withdraws consent. Configure those commands in BotFather's command menu for discoverability.
+
+Telegram retries are deduplicated by `update_id`; only that numeric identifier is retained before consent, never the unconsented message payload. Consented drafts are keyed by a one-way contributor hash and are deleted after submission or cancellation. Completed reports appear in the journalist inbox as opt-in, unverified leads. Telegram API response failures are recorded in the outbox as failed, while a photo-download failure leaves the text report available for manual review.
 
 ## Deployment reachability
 

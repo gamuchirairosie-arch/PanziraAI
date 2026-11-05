@@ -6,6 +6,7 @@ Only a human editor can create a PublicAlert (approved_by_id is NOT NULL).
 """
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -294,6 +295,24 @@ class TelegramUpdate(Base):
     __tablename__ = "telegram_updates"
     update_id: Mapped[int] = mapped_column(primary_key=True)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TelegramDraft(Base):
+    """Consented, in-progress Telegram questionnaire keyed by a reporter hash."""
+    __tablename__ = "telegram_drafts"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uuid.uuid4().hex)
+    contributor_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    state: Mapped[str] = mapped_column(String(20), default="category")
+    category_key: Mapped[Optional[str]] = mapped_column(String(20))
+    road_area: Mapped[str] = mapped_column(String(200), default="")
+    landmark: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    observed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    photo_file_id: Mapped[Optional[str]] = mapped_column(String(255))
+    lat: Mapped[Optional[float]] = mapped_column(Float)
+    lng: Mapped[Optional[float]] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class RSSSource(Base):

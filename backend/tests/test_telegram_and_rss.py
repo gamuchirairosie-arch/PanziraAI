@@ -7,7 +7,7 @@ from app.db import SessionLocal
 from app.integrations import rss_collector, telegram
 from app.integrations.messenger import Messenger
 from app.intake import get_consent, record_consent
-from app.models import Outbox, PublicAlert, Report, RSSSource, TelegramUpdate
+from app.models import Outbox, PublicAlert, Report, RSSSource, TelegramDraft, TelegramUpdate
 
 
 def test_telegram_webhook_requires_secret(client, monkeypatch):
@@ -77,12 +77,39 @@ def test_telegram_lead_is_visible_to_journalist_and_never_public(client, sent):
 
     db = SessionLocal()
     user_id = 777001
-    record_consent(db, str(user_id), "telegram", "en", allow_followup=True)
-    update = {"update_id": 9901, "message": {"message_id": 9,
-              "chat": {"id": user_id, "type": "private"}, "from": {"id": user_id},
-              "text": "Deep pothole on Khami Road near the industrial sites"}}
-    report_id = telegram.handle_update(db, update, fetch_photo=lambda _: None)
+    next_update = 9900
+
+    def answer(text=None, *, location=None):
+        nonlocal next_update
+        next_update += 1
+        message = {"message_id": next_update, "chat": {"id": user_id, "type": "private"},
+                   "from": {"id": user_id}}
+        if text is not None:
+            message["text"] = text
+        if location is not None:
+            message["location"] = location
+        return telegram.handle_update(db, {"update_id": next_update, "message": message},
+                                      fetch_photo=lambda _: None)
+
+    assert answer("/start report") is None
+    assert get_consent(db, str(user_id), "telegram") is None
+    assert answer("YES") is None
+    assert db.execute(select(TelegramDraft)).scalars().one().state == "category"
+    assert answer("1") is None
+    assert answer("A5 Bulawayo-Plumtree Road") is None
+    assert answer("Bellevue turn-off") is None
+    assert answer("NOW") is None
+    assert answer("Deep pothole across the outbound lane; vehicles are swerving") is None
+    assert answer(location={"latitude": -20.151, "longitude": 28.579}) is None
+    report_id = answer("SUBMIT")
     db.commit()
+    report = db.get(Report, report_id)
+    assert report.category_key == "potholes"
+    assert report.road_area == "A5 Bulawayo-Plumtree Road"
+    assert report.landmark == "Bellevue turn-off"
+    assert report.gps_reported is True
+    assert report.source_ref.startswith("telegram:draft:")
+    assert db.execute(select(TelegramDraft)).scalars().all() == []
     process_report(db, report_id)
     db.close()
 
@@ -97,6 +124,8 @@ def test_telegram_lead_is_visible_to_journalist_and_never_public(client, sent):
     assert response.status_code == 200, response.text
     lead = response.json()[0]
     assert lead["sourceChannelLabel"] == "Opt-in Telegram"
+    assert lead["roadArea"] == "A5 Bulawayo-Plumtree Road"
+    assert lead["landmark"] == "Bellevue turn-off"
     assert lead["visibility"] == "opt-in"
     assert lead["workflowStatus"] == "lead"
     assert all(value is False for value in lead["checklist"].values())
@@ -151,11 +180,16 @@ def test_stop_revokes_telegram_consent_and_blocks_new_report(sent):
     db = SessionLocal()
     user_id = 777003
     record_consent(db, str(user_id), "telegram", "en", allow_followup=True)
+    start = {"update_id": 9902, "message": {"message_id": 10,
+             "chat": {"id": user_id, "type": "private"}, "from": {"id": user_id}, "text": "/report"}}
+    assert telegram.handle_update(db, start) is None
+    assert db.execute(select(TelegramDraft)).scalars().one().state == "category"
     stop = {"update_id": 9903, "message": {"message_id": 11,
             "chat": {"id": user_id, "type": "private"}, "from": {"id": user_id}, "text": "/stop"}}
     assert telegram.handle_update(db, stop) is None
     db.commit()
     assert get_consent(db, str(user_id), "telegram") is None
+    assert db.execute(select(TelegramDraft)).scalars().all() == []
 
     after_stop = {"update_id": 9904, "message": {"message_id": 12,
                   "chat": {"id": user_id, "type": "private"}, "from": {"id": user_id},
