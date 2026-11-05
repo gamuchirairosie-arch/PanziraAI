@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: panzira-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python run_backend.py
+    healthCheckPath: /health
+    disk:
+      name: panzira-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: ENV
+        value: prod
+      - key: PRODUCTION
+        value: "true"
+      - key: DATABASE_URL
+        value: sqlite:////opt/render/project/src/data/panzira.db
+      - key: EVIDENCE_DIR
+        value: /opt/render/project/src/data/evidence
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PHONE_HASH_PEPPER
+        generateValue: true
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: TELEGRAM_EDITOR_CHAT_ID
+        sync: false
+      - key: TELEGRAM_ALERT_CHAT_ID
+        sync: false

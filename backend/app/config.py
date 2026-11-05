@@ -78,9 +78,9 @@ def get_settings() -> Settings:
     s = Settings()
     if s.env == "prod":
         missing = []
-        if s.secret_key.startswith("dev-only"):
+        if s.secret_key.startswith("dev-only") or s.secret_key == "panzira-hackathon-insecure-secret-key-change-in-prod-2025":
             missing.append("SECRET_KEY")
-        if not s.field_encryption_key:
+        if not s.field_encryption_key or s.field_encryption_key == "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=":
             missing.append("FIELD_ENCRYPTION_KEY")
         if s.phone_hash_pepper == "dev-pepper":
             missing.append("PHONE_HASH_PEPPER")
