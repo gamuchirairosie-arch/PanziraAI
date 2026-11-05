@@ -39,6 +39,8 @@ export interface NewCitizenReportInput {
   customPhotoDataUrl?: string;
   photoFilename?: string;
   containsGraphicContent?: boolean;
+  reportedLat?: number;
+  reportedLng?: number;
 }
 
 interface PersistedState {
@@ -313,7 +315,8 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         hash === 'verify' ||
         hash === 'hotspots' ||
         hash === 'fleet' ||
-        hash === 'briefs'
+        hash === 'briefs' ||
+        hash === 'sources'
       ) {
         setPortal('newsroom');
         setNewsroomView(hash);
@@ -518,6 +521,9 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ],
       isUserSubmitted: true,
       mapCoords: coords,
+      reportedLat: input.reportedLat,
+      reportedLng: input.reportedLng,
+      gpsReported: input.reportedLat !== undefined && input.reportedLng !== undefined,
     };
 
     setPersisted((prev) => ({
@@ -693,6 +699,8 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
             : ''
         }`,
         sourceAttribution: `Independently corroborated (4/4 editorial checks) · Approved by Rudo Moyo on ${readableApproval}`,
+        lat: target.gpsReported ? target.reportedLat : undefined,
+        lng: target.gpsReported ? target.reportedLng : undefined,
         desktopPin: {
           xPct: target.mapCoords.xPct,
           yPct: target.mapCoords.yPct,

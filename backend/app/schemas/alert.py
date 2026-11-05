@@ -27,6 +27,8 @@ class VerifiedPublicAlertResponse(BaseModel):
     description: str
     sourceAttribution: str
     desktopPin: DesktopPinSchema
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
     class Config:
         from_attributes = True

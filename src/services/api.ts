@@ -26,6 +26,38 @@ const HEALTH_URL =
     ? 'http://localhost:8000/health'
     : '/health');
 
+export interface NewsSourceRecord {
+  id: number;
+  name: string;
+  feedUrl: string;
+  publisherDomain: string;
+  basis: string;
+  active: boolean;
+  pollIntervalMinutes: number;
+  lastPolledAt: string | null;
+  lastError: string | null;
+}
+
+export interface CollectionRunRecord {
+  id: number;
+  sourceId: number | null;
+  source: string;
+  startedAt: string;
+  finishedAt: string | null;
+  fetched: number;
+  created: number;
+  duplicates: number;
+  skipped: number;
+  status: string;
+  error: string | null;
+}
+
+export interface IntegrationStatusRecord {
+  whatsapp: { configured: boolean; webhookPath: string };
+  telegram: { configured: boolean; publicAlertsConfigured: boolean; webhookPath: string };
+  ussd: { configured: boolean; webhookPath: string };
+}
+
 class ApiService {
   private token: string | null = null;
 
@@ -103,6 +135,8 @@ class ApiService {
       customPhotoDataUrl: input.customPhotoDataUrl,
       photoFilename: input.photoFilename,
       containsGraphicContent: input.containsGraphicContent,
+      reportedLat: input.reportedLat,
+      reportedLng: input.reportedLng,
     };
 
     const res = await fetch(`${API_BASE}/public/submit`, {
@@ -208,6 +242,60 @@ class ApiService {
     });
     if (!res.ok) throw new Error('Failed to load audit logs');
     return res.json();
+  }
+
+  async fetchIntegrationStatus(): Promise<IntegrationStatusRecord> {
+    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/integrations/status`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Could not load channel configuration status');
+    return res.json();
+  }
+
+  async fetchNewsSources(): Promise<NewsSourceRecord[]> {
+    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Could not load monitored sources');
+    return res.json();
+  }
+
+  async fetchCollectionRuns(): Promise<CollectionRunRecord[]> {
+    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources/runs`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Could not load source collection history');
+    return res.json();
+  }
+
+  async addNewsSource(input: { name: string; feedUrl: string; basis: string; pollIntervalMinutes: number }): Promise<NewsSourceRecord> {
+    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources`, {
+      method: 'POST', headers: this.getHeaders(), body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || 'Could not add source');
+    }
+    return res.json();
+  }
+
+  async setNewsSourceActive(id: number, active: boolean): Promise<NewsSourceRecord> {
+    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/news-sources/${id}`, {
+      method: 'PATCH', headers: this.getHeaders(), body: JSON.stringify({ active }),
+    });
+    if (!res.ok) throw new Error('Could not update source');
+    return res.json();
+  }
+
+  async collectNewsSources(id?: number): Promise<void> {
+    const path = id === undefined ? 'news-sources/collect' : `news-sources/${id}/collect`;
+    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/v1/${path}`, {
+      method: 'POST', headers: this.getHeaders(false),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || 'Could not start collection');
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 """Channel webhooks. Each handler validates the caller, hands off to the integration module, commits,
 and queues AI extraction in the background so the provider gets a fast 200."""
 import json
+import hmac
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
@@ -10,6 +11,7 @@ from ..config import get_settings
 from ..db import get_db
 from ..integrations import africastalking as at
 from ..integrations import messenger as msg
+from ..integrations import telegram as tg
 from ..integrations import whatsapp as wa
 from ..security import hash_contact, limiter, rate_limit
 from .reports import _bg_process
@@ -44,6 +46,27 @@ async def wa_incoming(request: Request, background: BackgroundTasks, db: Session
     for rid in created:
         background.add_task(_bg_process, rid)
     return {"status": "ok"}
+
+
+# ---------------- Telegram Bot API ----------------
+@router.post("/telegram", dependencies=[Depends(rate_limit("telegram_hook", 600, 60))])
+async def telegram_incoming(request: Request, background: BackgroundTasks):
+    s = get_settings()
+    expected = s.telegram_webhook_secret
+    supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(403, "Telegram webhook authentication failed")
+    raw = await request.body()
+    if len(raw) > 1_000_000:
+        raise HTTPException(413, "Telegram update is too large")
+    try:
+        update = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(400, "Invalid Telegram update")
+    if not isinstance(update, dict) or not isinstance(update.get("update_id"), int):
+        raise HTTPException(400, "Invalid Telegram update")
+    background.add_task(tg.process_update_background, update)
+    return {"ok": True}
 
 
 # ---------------- Africa's Talking ----------------

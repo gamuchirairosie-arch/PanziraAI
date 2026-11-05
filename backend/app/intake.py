@@ -19,7 +19,7 @@ from .security import Actor, encrypt_field, hash_contact, new_tracking_token
 from .storage import save_bytes
 from .workflow import add_timeline, fmt
 
-OPT_IN_CHANNELS = {"web", "whatsapp", "sms", "ussd"}
+OPT_IN_CHANNELS = {"web", "whatsapp", "telegram", "sms", "ussd"}
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 

@@ -36,8 +36,15 @@ class Messenger:
                            headers={"apiKey": s.at_api_key, "Accept": "application/json"},
                            data=data, timeout=10).raise_for_status()
                 status = "sent"
-        except Exception as exc:  # delivery problems must never break intake
-            log.warning("send failed: %s", exc)
+            elif channel == "telegram" and s.telegram_bot_token:
+                httpx.post(
+                    f"https://api.telegram.org/bot{s.telegram_bot_token}/sendMessage",
+                    json={"chat_id": to, "text": body, "disable_web_page_preview": True},
+                    timeout=10,
+                ).raise_for_status()
+                status = "sent"
+        except Exception:  # do not leak credential-bearing request URLs into logs
+            log.warning("send failed for channel %s", channel)
             status = "failed"
         db.add(Outbox(channel=channel, to_hash=hash_contact(to), body=body, status=status))
         db.flush()

@@ -12,6 +12,7 @@ from ..ai.pipeline import process_report
 from ..config import get_settings
 from ..db import SessionLocal, get_db
 from ..intake import attach_image, clean_text, create_report
+from ..integrations.telegram import send_approved_alert
 from ..models import DuplicateLink, PublicAlert, Report, Status, utcnow
 from ..security import (Actor, check_tracking_token, client_ip, current_actor, editor_only, newsroom, rate_limit)
 from ..serializers import to_signal
@@ -240,11 +241,12 @@ def reject(ref: str, body: NoteIn, actor: Actor = Depends(editor_only), db: Sess
 
 
 @router.post("/signals/{ref}/verify")
-def verify(ref: str, actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
+def verify(ref: str, background: BackgroundTasks, actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
     """The ONLY route that can create a public alert. Editor role + all gates enforced in workflow.publish."""
     r = _get(db, ref)
     alert = workflow.publish(db, r, actor)
     db.commit()
+    background.add_task(send_approved_alert, alert.id)
     return {"signal": to_signal(db, r, actor), "alertId": alert.public_code}
 
 

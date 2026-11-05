@@ -37,6 +37,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     { key: 'verify', label: 'Verify Reports', icon: ASSETS.navCircleCheck },
     { key: 'hotspots', label: 'Hotspots', icon: ASSETS.navMapPin, matchFleet: true },
     { key: 'briefs', label: 'Investigative Briefs', icon: ASSETS.navFileText },
+    { key: 'sources', label: 'Sources & Channels', icon: ASSETS.navInbox },
   ];
 
   const publicNavItems: Array<{ key: PublicView; label: string }> = [

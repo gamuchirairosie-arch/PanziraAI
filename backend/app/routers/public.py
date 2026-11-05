@@ -162,6 +162,9 @@ def submit_citizen_report(
         ],
         is_user_submitted=True,
         map_coords=loc["mapCoords"],
+        reported_lat=report_input.reportedLat,
+        reported_lng=report_input.reportedLng,
+        gps_reported=report_input.reportedLat is not None and report_input.reportedLng is not None,
     )
 
     db.add(new_signal)

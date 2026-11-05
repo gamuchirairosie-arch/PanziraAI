@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     wa_access_token: str = ""
     wa_phone_number_id: str = ""
 
+    # Telegram Bot API (optional; the webhook is unavailable until configured)
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    telegram_editor_chat_id: str = ""
+    telegram_alert_chat_id: str = ""
+
     at_username: str = "sandbox"
     at_api_key: str = ""
     at_sender_id: str = ""
@@ -60,13 +66,7 @@ class Settings(BaseSettings):
 
     @property
     def CORS_ORIGINS(self) -> List[str]:
-        return [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:3000",
-            "http://localhost:4173",
-        ]
+        return self.cors_list
 
     @property
     def cors_list(self) -> List[str]:

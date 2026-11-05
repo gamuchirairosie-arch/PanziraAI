@@ -16,6 +16,7 @@ import {
   SignalInboxView,
 } from './views/SignalInboxAndVerifyView';
 import { SignalMonitorView } from './views/SignalMonitorView';
+import { NewsSourceMonitorView } from './views/NewsSourceMonitorView';
 
 const ActiveRouteRenderer: React.FC = () => {
   const { portal, newsroomView, publicView } = usePanzira();
@@ -40,6 +41,8 @@ const ActiveRouteRenderer: React.FC = () => {
       return <FleetCorridorDeskView />;
     case 'briefs':
       return <InvestigativeBriefView />;
+    case 'sources':
+      return <NewsSourceMonitorView />;
     default:
       return <SignalMonitorView />;
   }

@@ -53,6 +53,39 @@ def run_migrations(db_path: str = "panzira.db"):
         cur.execute("UPDATE users SET active = is_active WHERE active IS NULL AND is_active IS NOT NULL")
         cur.execute("UPDATE users SET is_active = active WHERE is_active IS NULL AND active IS NOT NULL")
 
+    # Reporter-supplied browser coordinates are optional and separate from AI location guesses.
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='signal_reports'")
+    if cur.fetchone():
+        report_cols = {r[1] for r in cur.execute("PRAGMA table_info(signal_reports)").fetchall()}
+        report_migrations = [
+            ("reported_lat", "ALTER TABLE signal_reports ADD COLUMN reported_lat FLOAT"),
+            ("reported_lng", "ALTER TABLE signal_reports ADD COLUMN reported_lng FLOAT"),
+            ("gps_reported", "ALTER TABLE signal_reports ADD COLUMN gps_reported BOOLEAN NOT NULL DEFAULT 0"),
+        ]
+        for col, sql in report_migrations:
+            if col not in report_cols:
+                cur.execute(sql)
+
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='verified_public_alerts'")
+    if cur.fetchone():
+        alert_cols = {r[1] for r in cur.execute("PRAGMA table_info(verified_public_alerts)").fetchall()}
+        for col in ("lat", "lng"):
+            if col not in alert_cols:
+                cur.execute(f"ALTER TABLE verified_public_alerts ADD COLUMN {col} FLOAT")
+
+    # Reporter-supplied browser coordinates are optional and separate from AI location guesses.
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='signal_reports'")
+    if cur.fetchone():
+        report_cols = {r[1] for r in cur.execute("PRAGMA table_info(signal_reports)").fetchall()}
+        report_migrations = [
+            ("reported_lat", "ALTER TABLE signal_reports ADD COLUMN reported_lat FLOAT"),
+            ("reported_lng", "ALTER TABLE signal_reports ADD COLUMN reported_lng FLOAT"),
+            ("gps_reported", "ALTER TABLE signal_reports ADD COLUMN gps_reported BOOLEAN NOT NULL DEFAULT 0"),
+        ]
+        for col, sql in report_migrations:
+            if col not in report_cols:
+                cur.execute(sql)
+
     con.commit()
     con.close()
     print("[*] All migrations applied successfully and safely.")

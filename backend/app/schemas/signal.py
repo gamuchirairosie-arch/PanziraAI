@@ -45,6 +45,8 @@ class CitizenReportCreate(BaseModel):
     customPhotoDataUrl: Optional[str] = None
     photoFilename: Optional[str] = None
     containsGraphicContent: Optional[bool] = False
+    reportedLat: Optional[float] = Field(default=None, ge=-90, le=90)
+    reportedLng: Optional[float] = Field(default=None, ge=-180, le=180)
     # Integration provenance fields (when ingested via webhook or social collector)
     sourceChannelLabel: Optional[str] = "Citizen web"
     sourceChannelShort: Optional[str] = "Citizen web (opt-in)"
@@ -113,6 +115,9 @@ class SignalReportResponse(BaseModel):
     timeline: List[TimelineEventSchema]
     isUserSubmitted: bool
     mapCoords: MapCoordsSchema
+    reportedLat: Optional[float] = None
+    reportedLng: Optional[float] = None
+    gpsReported: bool = False
 
     class Config:
         from_attributes = True

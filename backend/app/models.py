@@ -282,3 +282,35 @@ class ContributorPref(Base):
     __tablename__ = "contributor_prefs"
     contributor_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     language: Mapped[str] = mapped_column(String(2), default="en")
+
+
+class RSSSource(Base):
+    """Editor-managed public RSS feed allow-list. Feed items are leads, never verified alerts."""
+    __tablename__ = "rss_sources"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    feed_url: Mapped[str] = mapped_column(String(1000), unique=True)
+    publisher_domain: Mapped[str] = mapped_column(String(255))
+    basis: Mapped[str] = mapped_column(Text, default="Publisher-provided public RSS feed")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    poll_interval_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    last_polled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[Optional[str]] = mapped_column(Text)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CollectionRun(Base):
+    """Audit summary for each RSS collection attempt, including failed fetches."""
+    __tablename__ = "collection_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rss_sources.id"), index=True)
+    source_name: Mapped[str] = mapped_column(String(160))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    fetched_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_count: Mapped[int] = mapped_column(Integer, default=0)
+    duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    error: Mapped[Optional[str]] = mapped_column(Text)

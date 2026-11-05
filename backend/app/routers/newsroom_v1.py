@@ -11,12 +11,116 @@ from ..corridors import BY_ID
 from ..db import SessionLocal, get_db
 from ..integrations import meta
 from ..intake import clean_text, create_report
-from ..models import AuditLog, Brief, PublicAlert, Report, Role, SourceRegistration
+from ..models import AuditLog, Brief, CollectionRun, PublicAlert, RSSSource, Report, Role, SourceRegistration
 from ..security import (Actor, admin_only, client_ip, editor_only, newsroom, require_roles)
 from ..serializers import all_corridors, brief_out, corridor_risk
 from .reports import _bg_process, _get
 
 router = APIRouter(prefix="/api/v1", tags=["newsroom-v1"])
+
+
+# ---------- free publisher RSS monitoring ----------
+class RSSSourceIn(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    feedUrl: HttpUrl
+    basis: str = Field(default="Publisher-provided public RSS feed", min_length=8, max_length=500)
+    pollIntervalMinutes: int = Field(default=15, ge=5, le=1440)
+
+
+def _rss_source_out(source: RSSSource) -> dict:
+    return {"id": source.id, "name": source.name, "feedUrl": source.feed_url,
+            "publisherDomain": source.publisher_domain, "basis": source.basis,
+            "active": source.active, "pollIntervalMinutes": source.poll_interval_minutes,
+            "lastPolledAt": source.last_polled_at.isoformat() if source.last_polled_at else None,
+            "lastError": source.last_error}
+
+
+@router.get("/news-sources")
+def list_rss_sources(actor: Actor = Depends(newsroom), db: Session = Depends(get_db)):
+    sources = db.execute(select(RSSSource).order_by(RSSSource.name)).scalars().all()
+    return [_rss_source_out(source) for source in sources]
+
+
+@router.post("/news-sources", status_code=201)
+def add_rss_source(body: RSSSourceIn, request: Request, actor: Actor = Depends(editor_only),
+                   db: Session = Depends(get_db)):
+    from ..integrations.rss_collector import validate_feed_url
+    try:
+        feed_url, domain = validate_feed_url(str(body.feedUrl))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    existing = db.execute(select(RSSSource).where(RSSSource.feed_url == feed_url)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(409, "This feed URL is already registered")
+    source = RSSSource(name=clean_text(body.name, 160), feed_url=feed_url, publisher_domain=domain,
+                       basis=clean_text(body.basis, 500), poll_interval_minutes=body.pollIntervalMinutes,
+                       created_by_id=actor.id)
+    db.add(source)
+    db.flush()
+    audit.record(db, actor, "rss_source_added", "rss_source", source.id,
+                 {"name": source.name, "domain": domain, "basis": source.basis}, client_ip(request))
+    db.commit()
+    return _rss_source_out(source)
+
+
+@router.patch("/news-sources/{source_id}")
+def set_rss_source_active(source_id: int, body: dict, request: Request,
+                          actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
+    if set(body) != {"active"} or not isinstance(body["active"], bool):
+        raise HTTPException(422, "Body must contain only a boolean 'active' field")
+    source = db.get(RSSSource, source_id)
+    if not source:
+        raise HTTPException(404, "News source not found")
+    source.active = body["active"]
+    audit.record(db, actor, "rss_source_updated", "rss_source", source.id,
+                 {"active": source.active}, client_ip(request))
+    db.commit()
+    return _rss_source_out(source)
+
+
+@router.post("/news-sources/collect", status_code=202)
+def collect_rss_sources(background: BackgroundTasks, actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
+    from ..integrations.rss_collector import collect_active_sources
+    if not db.execute(select(RSSSource.id).where(RSSSource.active.is_(True))).first():
+        raise HTTPException(409, "Add and activate an RSS source first")
+    background.add_task(collect_active_sources)
+    return {"queued": True}
+
+
+@router.post("/news-sources/{source_id}/collect", status_code=202)
+def collect_one_rss_source(source_id: int, background: BackgroundTasks,
+                           actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
+    source = db.get(RSSSource, source_id)
+    if not source or not source.active:
+        raise HTTPException(404, "Active news source not found")
+    from ..integrations.rss_collector import collect_source_by_id
+    background.add_task(collect_source_by_id, source_id)
+    return {"queued": True}
+
+
+@router.get("/news-sources/runs")
+def rss_collection_runs(limit: int = 100, actor: Actor = Depends(newsroom), db: Session = Depends(get_db)):
+    rows = db.execute(select(CollectionRun).order_by(CollectionRun.id.desc()).limit(max(1, min(limit, 200)))).scalars()
+    return [{"id": row.id, "sourceId": row.source_id, "source": row.source_name,
+             "startedAt": row.started_at.isoformat(),
+             "finishedAt": row.finished_at.isoformat() if row.finished_at else None,
+             "fetched": row.fetched_count, "created": row.created_count,
+             "duplicates": row.duplicate_count, "skipped": row.skipped_count,
+             "status": row.status, "error": row.error} for row in rows]
+
+
+@router.get("/integrations/status")
+def integrations_status(actor: Actor = Depends(newsroom)):
+    from ..config import get_settings
+    settings = get_settings()
+    return {"whatsapp": {"configured": bool(settings.wa_access_token and settings.wa_phone_number_id
+                                                and settings.wa_app_secret and settings.wa_verify_token),
+                          "webhookPath": "/api/v1/webhooks/whatsapp"},
+            "telegram": {"configured": bool(settings.telegram_bot_token and settings.telegram_webhook_secret),
+                         "publicAlertsConfigured": bool(settings.telegram_bot_token and settings.telegram_alert_chat_id),
+                         "webhookPath": "/api/v1/webhooks/telegram"},
+            "ussd": {"configured": bool(settings.at_api_key and settings.at_webhook_secret),
+                     "webhookPath": "/api/v1/webhooks/africastalking/ussd"}}
 
 
 # ---------- corridors ----------

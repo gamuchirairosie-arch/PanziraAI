@@ -58,6 +58,9 @@ export const ReportHazardView: React.FC = () => {
   const [landmark, setLandmark] = useState<string>('');
   const [language, setLanguage] = useState<'English' | 'Shona' | 'Ndebele'>('English');
   const [description, setDescription] = useState<string>('');
+  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   // Initialize observed date/time to current local browser time
   const [observedDateTimeInput, setObservedDateTimeInput] = useState<string>(() =>
@@ -92,10 +95,34 @@ export const ReportHazardView: React.FC = () => {
     setValidationError(null);
   };
 
-  const handleSimulatedGps = () => {
-    setRoadArea('A5 Bulawayo–Plumtree Road');
-    setLandmark('Near Plumtree turn-off (~19.8 km west of CBD · demo GPS)');
-    setValidationError(null);
+  const handleDeviceLocation = () => {
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError('This browser does not provide device location. You can still submit the road and landmark.');
+      return;
+    }
+    if (!window.isSecureContext) {
+      setLocationError('Device location requires a secure HTTPS page. You can still submit the road and landmark.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setDeviceLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        });
+        setLocating(false);
+      },
+      (error) => {
+        setLocationError(error.code === error.PERMISSION_DENIED
+          ? 'Location permission was declined. You can still submit the road and landmark.'
+          : 'Could not get a device location. You can still submit the road and landmark.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+    );
   };
 
   const handleDateTimeChange = (nextVal: string) => {
@@ -191,6 +218,8 @@ export const ReportHazardView: React.FC = () => {
         customPhotoDataUrl,
         photoFilename,
         containsGraphicContent,
+        reportedLat: deviceLocation?.lat,
+        reportedLng: deviceLocation?.lng,
       });
 
       setSubmittedReceipt(created);
@@ -510,10 +539,11 @@ export const ReportHazardView: React.FC = () => {
                     type="button"
                     className="pz-portal-link-btn"
                     style={{ height: '34px', fontSize: '12px' }}
-                    onClick={handleSimulatedGps}
+                    onClick={handleDeviceLocation}
+                    disabled={locating}
                   >
                     <img src={ASSETS.locateFixed} alt="" style={{ width: '14px', height: '14px' }} />
-                    <span>Use demo GPS location</span>
+                    <span>{locating ? 'Finding location…' : deviceLocation ? 'Refresh my location' : 'Use my location (optional)'}</span>
                   </button>
                 </div>
                 <input
@@ -524,6 +554,11 @@ export const ReportHazardView: React.FC = () => {
                   onChange={(e) => setRoadArea(e.target.value)}
                   placeholder="e.g. A5 Bulawayo–Plumtree Road, Khami Road, 12th Avenue"
                 />
+                <p className="pz-page-subtitle" role={locationError ? 'alert' : 'status'}>
+                  {locationError || (deviceLocation
+                    ? `Location captured with about ${Math.round(deviceLocation.accuracy)} m accuracy. Shared with newsroom editors to locate this report.`
+                    : 'Your browser asks permission before sharing location. Coordinates are optional and are not shown on the public map.')}
+                </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
                   {[
                     'A5 Bulawayo–Plumtree Road',

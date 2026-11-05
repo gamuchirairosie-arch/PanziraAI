@@ -30,7 +30,11 @@ export const PublicDashboardView: React.FC = () => {
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>('PZ-PUB-102');
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [showUssdModal, setShowUssdModal] = useState(false);
+  const [showTelegramSetup, setShowTelegramSetup] = useState(false);
   const [mobileTab, setMobileTab] = useState<'map' | 'alerts'>('map');
+  const whatsappNumber = import.meta.env.VITE_WHATSAPP_NUMBER?.replace(/\D/g, '');
+  const telegramUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.replace(/^@/, '');
+  const ussdCode = import.meta.env.VITE_USSD_SERVICE_CODE;
 
   const filteredAlerts = useMemo(() => {
     const q = publicSearch.trim().toLowerCase();
@@ -616,19 +620,34 @@ export const PublicDashboardView: React.FC = () => {
             type="button"
             className="pz-btn-channel-whatsapp"
             style={{ minHeight: '40px', padding: '0 14px', fontSize: '13.5px' }}
-            onClick={() => setShowWhatsAppModal(true)}
-            title="Open interactive WhatsApp bot demo"
+            onClick={() => whatsappNumber
+              ? window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent('Hello Panzira, I would like to report a road hazard.')}`, '_blank', 'noopener,noreferrer')
+              : setShowWhatsAppModal(true)}
+            title={whatsappNumber ? 'Open Panzira WhatsApp tipline' : 'Open WhatsApp report demo; configure VITE_WHATSAPP_NUMBER for the live tipline'}
           >
-            WhatsApp Demo 💬
+            {whatsappNumber ? 'WhatsApp' : 'WhatsApp Demo'} 💬
           </button>
           <button
             type="button"
             className="pz-btn-channel-ussd"
             style={{ minHeight: '40px', padding: '0 14px', fontSize: '13.5px' }}
-            onClick={() => setShowUssdModal(true)}
-            title="Open interactive USSD *140# demo"
+            onClick={() => ussdCode
+              ? window.location.assign(`tel:${encodeURIComponent(ussdCode)}`)
+              : setShowUssdModal(true)}
+            title={ussdCode ? 'Dial the configured Panzira USSD service code' : 'Open USSD demo; configure the live service code to dial from a phone'}
           >
             USSD (*140#) 📟
+          </button>
+          <button
+            type="button"
+            className="pz-portal-link-btn"
+            style={{ minHeight: '40px', padding: '0 14px', fontSize: '13.5px' }}
+            onClick={() => telegramUsername
+              ? window.open(`https://t.me/${telegramUsername}`, '_blank', 'noopener,noreferrer')
+              : setShowTelegramSetup(true)}
+            title={telegramUsername ? 'Open Panzira Telegram bot' : 'Telegram needs a public bot username'}
+          >
+            Telegram ✈
           </button>
         </div>
       </div>
@@ -878,6 +897,21 @@ export const PublicDashboardView: React.FC = () => {
         isOpen={showUssdModal}
         onClose={() => setShowUssdModal(false)}
       />
+      {showTelegramSetup && (
+        <div role="presentation" className="pz-modal-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setShowTelegramSetup(false);
+        }} style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,.6)',
+          display: 'grid', placeItems: 'center', padding: 16 }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="telegram-setup-title"
+            className="pz-card-panel" style={{ maxWidth: 480, width: '100%', padding: 22, gap: 14 }}>
+            <h2 id="telegram-setup-title" className="pz-section-heading">Telegram reporting</h2>
+            <p>The Telegram Bot API intake is available when the newsroom has configured its bot token, webhook secret, and HTTPS webhook endpoint.</p>
+            <p>Once the bot is configured, set the public bot username as <code>VITE_TELEGRAM_BOT_USERNAME</code> to connect this button to it.</p>
+            <p>Reports sent to the bot require explicit consent and enter the unverified newsroom queue.</p>
+            <button type="button" className="pz-btn-secondary" onClick={() => setShowTelegramSetup(false)}>Close</button>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

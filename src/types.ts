@@ -6,7 +6,8 @@ export type NewsroomView =
   | 'verify'
   | 'hotspots'
   | 'fleet'
-  | 'briefs';
+  | 'briefs'
+  | 'sources';
 
 export type PublicView =
   | 'overview'
@@ -112,6 +113,9 @@ export interface SignalReport {
     xPct: number;
     yPct: number;
   };
+  reportedLat?: number;
+  reportedLng?: number;
+  gpsReported?: boolean;
 }
 
 export interface VerifiedPublicAlert {
@@ -129,6 +133,8 @@ export interface VerifiedPublicAlert {
   approvedAtReadable?: string;
   description: string;
   sourceAttribution: string;
+  lat?: number | null;
+  lng?: number | null;
   desktopPin: {
     xPct: number;
     yPct: number;

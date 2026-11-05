@@ -11,7 +11,7 @@ Strict Safety Policy:
 
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -25,6 +25,7 @@ from app.schemas.signal import (
 )
 from app.auth.dependencies import require_journalist, require_editor
 from app.audit.logger import log_editorial_action
+from app.integrations.telegram import send_legacy_approved_alert
 
 router = APIRouter(prefix="/newsroom", tags=["Newsroom Editorial Desk"])
 
@@ -232,6 +233,7 @@ def reject_signal(
 @router.post("/signals/{signal_id}/verify", response_model=SignalReportResponse)
 def verify_and_publish_signal(
     signal_id: str,
+    background: BackgroundTasks,
     current_user: User = Depends(require_editor),
     db: Session = Depends(get_db)
 ):
@@ -316,6 +318,8 @@ def verify_and_publish_signal(
                 "yPct": sig.map_coords.get("yPct", 50.0),
                 "pinAsset": pin_asset,
             },
+            lat=sig.reported_lat if sig.gps_reported else None,
+            lng=sig.reported_lng if sig.gps_reported else None,
             approved_by_user_id=current_user.id,
             approved_by_name=current_user.full_name,
         )
@@ -332,6 +336,8 @@ def verify_and_publish_signal(
 
     db.commit()
     db.refresh(sig)
+    if not existing_alert:
+        background.add_task(send_legacy_approved_alert, f"PZ-PUB-{signal_id}")
     return SignalReportResponse.model_validate(sig)
 
 
