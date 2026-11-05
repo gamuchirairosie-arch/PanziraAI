@@ -284,6 +284,18 @@ class ContributorPref(Base):
     language: Mapped[str] = mapped_column(String(2), default="en")
 
 
+class TelegramUpdate(Base):
+    """Processed Bot API update ids.
+
+    Telegram retries webhook deliveries. Keeping only the provider update id avoids
+    duplicate consent prompts, acknowledgements, and reports without retaining an
+    unconsented message payload.
+    """
+    __tablename__ = "telegram_updates"
+    update_id: Mapped[int] = mapped_column(primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class RSSSource(Base):
     """Editor-managed public RSS feed allow-list. Feed items are leads, never verified alerts."""
     __tablename__ = "rss_sources"

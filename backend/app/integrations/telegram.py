@@ -9,15 +9,33 @@ import logging
 
 import httpx
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import SessionLocal
 from ..intake import attach_image, create_report, get_consent, revoke_consent, record_consent
+from ..models import TelegramUpdate
 from ..security import Actor, limiter
 from . import messenger as msg
 
 log = logging.getLogger("panzira.telegram")
+
+
+def _claim_update(db: Session, update: dict) -> bool:
+    """Claim a provider update once, storing no message content or chat identity."""
+    update_id = update.get("update_id")
+    if not isinstance(update_id, int):
+        return True  # direct/internal callers; the HTTP webhook validates this field
+    if db.get(TelegramUpdate, update_id) is not None:
+        return False
+    db.add(TelegramUpdate(update_id=update_id))
+    try:
+        db.flush()
+    except IntegrityError:  # another webhook worker won the same delivery race
+        db.rollback()
+        return False
+    return True
 
 
 def _telegram_call(method: str, payload: dict | None = None) -> dict:
@@ -58,6 +76,8 @@ def download_photo(file_id: str) -> bytes | None:
 
 def handle_update(db: Session, update: dict, fetch_photo=download_photo) -> int | None:
     """Process a Bot API update. Returns a report id only when a new report is created."""
+    if not _claim_update(db, update):
+        return None
     message = update.get("message") or update.get("edited_message")
     if not message:
         return None
@@ -105,7 +125,11 @@ def handle_update(db: Session, update: dict, fetch_photo=download_photo) -> int 
         contact=contact, allow_followup=bool(consent.allow_followup),
     )
     if created and photo_id:
-        content = fetch_photo(photo_id)
+        try:
+            content = fetch_photo(photo_id)
+        except Exception:
+            log.warning("Telegram image provider failed for report %s", report.public_id)
+            content = None
         if content:
             try:
                 attach_image(db, report, content, "telegram-photo", Actor.system("system:telegram"))

@@ -6,9 +6,6 @@ interface ImportMetaEnv {
   readonly VITE_TELEGRAM_BOT_USERNAME?: string;
   readonly VITE_WHATSAPP_NUMBER?: string;
   readonly VITE_USSD_SERVICE_CODE?: string;
-  readonly VITE_TELEGRAM_BOT_USERNAME?: string;
-  readonly VITE_WHATSAPP_NUMBER?: string;
-  readonly VITE_USSD_SERVICE_CODE?: string;
 }
 
 interface ImportMeta {

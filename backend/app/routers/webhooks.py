@@ -2,6 +2,7 @@
 and queues AI extraction in the background so the provider gets a fast 200."""
 import json
 import hmac
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
@@ -17,6 +18,7 @@ from ..security import hash_contact, limiter, rate_limit
 from .reports import _bg_process
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+_TELEGRAM_SECRET = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 
 
 # ---------------- WhatsApp Cloud API ----------------
@@ -54,7 +56,9 @@ async def telegram_incoming(request: Request, background: BackgroundTasks):
     s = get_settings()
     expected = s.telegram_webhook_secret
     supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+    if not expected or not _TELEGRAM_SECRET.fullmatch(expected):
+        raise HTTPException(503, "Telegram webhook secret is not configured correctly")
+    if not supplied or not hmac.compare_digest(supplied, expected):
         raise HTTPException(403, "Telegram webhook authentication failed")
     raw = await request.body()
     if len(raw) > 1_000_000:

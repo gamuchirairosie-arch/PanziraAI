@@ -37,11 +37,14 @@ class Messenger:
                            data=data, timeout=10).raise_for_status()
                 status = "sent"
             elif channel == "telegram" and s.telegram_bot_token:
-                httpx.post(
+                response = httpx.post(
                     f"https://api.telegram.org/bot{s.telegram_bot_token}/sendMessage",
                     json={"chat_id": to, "text": body, "disable_web_page_preview": True},
                     timeout=10,
-                ).raise_for_status()
+                )
+                response.raise_for_status()
+                if not response.json().get("ok"):
+                    raise RuntimeError("Telegram API rejected the message")
                 status = "sent"
         except Exception:  # do not leak credential-bearing request URLs into logs
             log.warning("send failed for channel %s", channel)

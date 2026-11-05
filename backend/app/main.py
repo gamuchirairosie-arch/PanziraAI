@@ -114,7 +114,10 @@ app.include_router(integrations_router, prefix="/api")
 app.include_router(v1_auth_router)
 app.include_router(v1_reports_router)
 app.include_router(v1_evidence_router)
-app.include_router(v1_webhooks_router)
+# Provider consoles and integration status use the versioned callback paths.
+app.include_router(v1_webhooks_router, prefix="/api/v1")
+# Keep the original unversioned callbacks working for existing installations.
+app.include_router(v1_webhooks_router, include_in_schema=False)
 app.include_router(v1_newsroom_router)
 app.include_router(v1_public_router)
 

@@ -6,7 +6,7 @@ This adds integrations to the existing FastAPI/React application. Provider calls
 
 1. Install the backend dependencies from the repository root with `python -m pip install -r requirements.txt`.
 2. Copy `backend/.env.example` to `backend/.env`, then set unique `SECRET_KEY`, `FIELD_ENCRYPTION_KEY`, and `PHONE_HASH_PEPPER` values. Keep this file private and out of source control.
-3. Set `CORS_ORIGINS` in the backend environment to the exact frontend origins. Set `VITE_API_BASE_URL` in the frontend environment to the backend API base URL if it is not served through the same origin.
+3. Set `CORS_ORIGINS` in the backend environment to the exact frontend origins. When the frontend and backend use different hosts, set the frontend build variable `VITE_API_BASE_URL` to the public backend origin (for example `https://api.example.org`; a value ending in `/api` is also accepted).
 4. Run `python backend/run.py` and `npm run dev` from the repository root. Open the frontend on `http://localhost:5173`; browser location access works on localhost, or on a deployed HTTPS origin, after the user grants permission.
 
 For callback development, expose the backend through a trusted HTTPS tunnel and configure that temporary public URL in each provider console. A local-only backend cannot receive provider webhooks. Do not use production tokens in a shared tunnel.
@@ -18,6 +18,14 @@ Configure `WA_VERIFY_TOKEN`, `WA_APP_SECRET`, `WA_ACCESS_TOKEN`, and `WA_PHONE_N
 ## Telegram Bot API
 
 Create a bot with Telegram's BotFather. Set `TELEGRAM_BOT_TOKEN` and a random `TELEGRAM_WEBHOOK_SECRET` (1–256 characters, using Telegram's supported header-token characters). Set the webhook to `https://<backend-host>/api/v1/webhooks/telegram` with that secret token. Set `VITE_TELEGRAM_BOT_USERNAME` to the bot username (without `@`) for the public report button. `TELEGRAM_EDITOR_CHAT_ID` receives new lead notices; `TELEGRAM_ALERT_CHAT_ID` is the destination for editor-approved public alerts. The bot handles private chats only, requests explicit consent, and supports text, photos, and location pins. Users can send `/stop` to withdraw consent.
+
+Telegram retries are deduplicated by `update_id`; only that numeric identifier is retained before consent, never the unconsented message payload. Reports appear in the journalist inbox as opt-in, unverified leads. Telegram API response failures are recorded in the outbox as failed, while a photo-download failure leaves the text or caption lead available for manual review.
+
+## Deployment reachability
+
+The Vercel frontend is a static deployment and does not run this FastAPI service. A 404 from `<frontend-host>/health` or `<frontend-host>/api/public/alerts` therefore means the frontend build has no reachable backend configured; it is not a Telegram credential failure. Deploy the backend separately with persistent storage, then set `VITE_API_BASE_URL` on the frontend deployment and rebuild it. Confirm `https://<backend-host>/health` and `https://<backend-host>/api/public/alerts` return HTTP 200, and set `CORS_ORIGINS` on the backend to the exact frontend origin.
+
+After the backend is reachable, register `https://<backend-host>/api/v1/webhooks/telegram` with Telegram using the same value as `TELEGRAM_WEBHOOK_SECRET`. A missing or invalid server-side webhook secret returns HTTP 503; a mismatched Telegram secret header returns HTTP 403. Bot credentials, webhook registration, the public HTTPS backend, and the editor or alert chat IDs are external setup and cannot be supplied by application code.
 
 ## USSD
 

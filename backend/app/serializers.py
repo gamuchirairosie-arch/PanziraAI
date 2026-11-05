@@ -17,10 +17,12 @@ from .models import Brief, DuplicateLink, Evidence, PublicAlert, Report, Status,
 from .security import Actor, media_token
 from .workflow import fmt
 
-CHANNEL_LABEL = {"web": "Citizen web", "whatsapp": "Opt-in WhatsApp", "sms": "SMS report", "ussd": "USSD report",
+CHANNEL_LABEL = {"web": "Citizen web", "whatsapp": "Opt-in WhatsApp", "telegram": "Opt-in Telegram",
+                 "sms": "SMS report", "ussd": "USSD report",
                  "facebook_page": "Public Facebook page", "instagram": "Instagram link",
                  "public_link": "Submitted public link"}
-CHANNEL_SHORT = {"web": "Citizen web (opt-in)", "whatsapp": "WhatsApp opt-in", "sms": "SMS opt-in",
+CHANNEL_SHORT = {"web": "Citizen web (opt-in)", "whatsapp": "WhatsApp opt-in", "telegram": "Telegram opt-in",
+                 "sms": "SMS opt-in",
                  "ussd": "USSD opt-in", "facebook_page": "Authorized Facebook page",
                  "instagram": "Instagram link", "public_link": "Submitted public link"}
 LANG_NAME = {"en": "English", "sn": "Shona", "nd": "Ndebele"}
