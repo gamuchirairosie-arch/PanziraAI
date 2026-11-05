@@ -16,7 +16,7 @@ from ..integrations import whatsapp as wa
 from ..security import hash_contact, limiter, rate_limit
 from .reports import _bg_process
 
-router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
+router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 # ---------------- WhatsApp Cloud API ----------------

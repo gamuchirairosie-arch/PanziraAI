@@ -115,6 +115,9 @@ app.include_router(v1_auth_router)
 app.include_router(v1_reports_router)
 app.include_router(v1_evidence_router)
 app.include_router(v1_webhooks_router)
+# Preserve the legacy provider callback URLs while also exposing the documented
+# versioned Telegram path used by integration status and external configuration.
+app.include_router(v1_webhooks_router, prefix="/api/v1")
 app.include_router(v1_newsroom_router)
 app.include_router(v1_public_router)
 
