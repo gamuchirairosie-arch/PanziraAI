@@ -33,7 +33,8 @@ export const PublicDashboardView: React.FC = () => {
   const [showTelegramSetup, setShowTelegramSetup] = useState(false);
   const [mobileTab, setMobileTab] = useState<'map' | 'alerts'>('map');
   const whatsappNumber = import.meta.env.VITE_WHATSAPP_NUMBER?.replace(/\D/g, '');
-  const telegramUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.replace(/^@/, '');
+  const telegramUsername =
+    import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.replace(/^@/, '') || 'PanziraBot';
   const ussdCode = import.meta.env.VITE_USSD_SERVICE_CODE;
 
   const filteredAlerts = useMemo(() => {
@@ -642,10 +643,12 @@ export const PublicDashboardView: React.FC = () => {
             type="button"
             className="pz-portal-link-btn"
             style={{ minHeight: '40px', padding: '0 14px', fontSize: '13.5px' }}
-            onClick={() => telegramUsername
-              ? window.open(`https://t.me/${telegramUsername}`, '_blank', 'noopener,noreferrer')
-              : setShowTelegramSetup(true)}
-            title={telegramUsername ? 'Open Panzira Telegram bot' : 'Telegram needs a public bot username'}
+            onClick={() => window.open(
+              `https://t.me/${telegramUsername}?start=report`,
+              '_blank',
+              'noopener,noreferrer'
+            )}
+            title="Report a road incident through the Panzira Telegram bot"
           >
             Telegram ✈
           </button>
