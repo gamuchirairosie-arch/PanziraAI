@@ -32,11 +32,21 @@ def hash_password(password: str) -> str:
     return f"pbkdf2${_ITER}${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}"
 
 
-def verify_password(password: str, stored: str) -> bool:
+def verify_password(password: str, stored: str | None) -> bool:
+    if not stored:
+        return False
     try:
-        _, it, salt_b64, dk_b64 = stored.split("$")
-        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), base64.b64decode(salt_b64), int(it))
-        return hmac.compare_digest(dk, base64.b64decode(dk_b64))
+        parts = stored.split("$")
+        if len(parts) == 4 and parts[0] == "pbkdf2":
+            _, it, salt_b64, dk_b64 = parts
+            dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), base64.b64decode(salt_b64), int(it))
+            return hmac.compare_digest(dk, base64.b64decode(dk_b64))
+        if len(parts) == 2:
+            salt = bytes.fromhex(parts[0])
+            expected_key = bytes.fromhex(parts[1])
+            actual_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
+            return hmac.compare_digest(expected_key, actual_key)
+        return False
     except Exception:
         return False
 
@@ -60,6 +70,8 @@ class Actor:
     label: str
     role: str
     can_view_graphic: bool = False
+    media_house: str | None = None
+    verification_status: str = "verified"
 
     @classmethod
     def system(cls, label: str = "system:pipeline") -> "Actor":
@@ -67,7 +79,14 @@ class Actor:
 
     @classmethod
     def from_user(cls, u: User) -> "Actor":
-        return cls(u.id, u.name, u.role, u.can_view_graphic)
+        return cls(
+            u.id,
+            u.name or getattr(u, "full_name", None) or u.email,
+            u.role,
+            bool(u.can_view_graphic),
+            getattr(u, "media_house", None),
+            getattr(u, "verification_status", None) or "verified",
+        )
 
 
 def current_actor(
@@ -89,6 +108,8 @@ def current_actor(
 
 def require_roles(*roles: str) -> Callable:
     def dep(actor: Actor = Depends(current_actor)) -> Actor:
+        if actor.verification_status != "verified":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is pending admin verification")
         if actor.role not in roles:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Your role cannot perform this action")
         return actor
@@ -96,8 +117,9 @@ def require_roles(*roles: str) -> Callable:
 
 
 newsroom = require_roles(Role.JOURNALIST, Role.EDITOR, Role.ADMIN)
-editor_only = require_roles(Role.EDITOR)
+editor_only = require_roles(Role.EDITOR, Role.ADMIN)
 admin_only = require_roles(Role.ADMIN)
+citizen_or_above = require_roles(*Role.ALL_HUMAN)
 
 
 # ---------- privacy helpers ----------

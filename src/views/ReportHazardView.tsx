@@ -1,947 +1,1541 @@
-import React, { useMemo, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ASSETS } from '../assetsMap';
-import { CorridorContextMap } from '../components/BulawayoMap';
-import { EvidencePhotoFrame } from '../components/CroppedFigmaMedia';
-import { usePanzira } from '../context/PanziraContext';
-import { HazardCategoryKey, SignalReport } from '../types';
+import { NewCitizenReportInput, usePanzira } from '../context/PanziraContext';
 import {
-  toLocalDateTimeInputValue,
-  validateObservedDateTime,
-} from '../utils/dateTime';
+  AttributionMode,
+  HazardCategoryKey,
+  LicenseTier,
+} from '../types';
 
-interface CategoryChoice {
+type ReportStep = 1 | 2 | 3 | 4;
+
+interface CategoryOption {
   key: HazardCategoryKey;
   label: string;
-  description: string;
+  subtitle: string;
   icon: string;
 }
 
-const CATEGORY_OPTIONS: CategoryChoice[] = [
+const CATEGORY_OPTIONS: CategoryOption[] = [
   {
     key: 'potholes',
     label: 'Road surface damage',
-    description: 'Large potholes, washed-out shoulders, deep trenches or collapsed road edges',
+    subtitle: 'Potholes, cracks or damaged edges',
     icon: ASSETS.catRoadDamage,
   },
   {
     key: 'flooding',
     label: 'Flooding',
-    description: 'Standing water across lanes, blocked storm drains or flooded low bridges',
+    subtitle: 'Standing or fast-moving water',
     icon: ASSETS.catFlooding,
   },
   {
     key: 'collisions',
-    label: 'Collision or breakdown',
-    description: 'Crash blocking traffic, stationary heavy truck or spilled cargo',
+    label: 'Collision',
+    subtitle: 'A crash or blocked carriageway',
     icon: ASSETS.catCollision,
   },
   {
-    key: 'visibility',
-    label: 'Visibility & lighting',
-    description: 'Failed street lighting, missing warning signs, smoke or unlit roadworks',
-    icon: ASSETS.catVisibility,
-  },
-  {
     key: 'other',
-    label: 'Other road hazard',
-    description: 'Fallen trees, stray livestock on highway corridor, or damaged barriers',
+    label: 'Other hazard',
+    subtitle: 'Visibility, vehicles or obstructions',
     icon: ASSETS.catOther,
   },
 ];
 
 export const ReportHazardView: React.FC = () => {
-  const { submitCitizenReport, navigatePublic, navigateNewsroom } = usePanzira();
+  const { submitCitizenReport, navigatePublic, navigateAuth, setPendingClaimPrefill } = usePanzira();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<ReportStep>(1);
   const [categoryKey, setCategoryKey] = useState<HazardCategoryKey>('potholes');
-  const [roadArea, setRoadArea] = useState<string>('');
-  const [landmark, setLandmark] = useState<string>('');
+  const [roadOrArea, setRoadOrArea] = useState<string>('A5 corridor (Bulawayo–Plumtree)');
+  const [landmark, setLandmark] = useState<string>('Towards Plumtree');
+  const [description, setDescription] = useState<string>(
+    'Large potholes on the A5 towards Plumtree. Difficult to see at night.'
+  );
   const [language, setLanguage] = useState<'English' | 'Shona' | 'Ndebele'>('English');
-  const [description, setDescription] = useState<string>('');
-  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [locating, setLocating] = useState(false);
+  const [lowBandwidth, setLowBandwidth] = useState<boolean>(true);
+  const [includePhoto, setIncludePhoto] = useState<boolean>(false);
+  const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
+  const [customPhotoName, setCustomPhotoName] = useState<string | null>(null);
+  const [licenseTier, setLicenseTier] = useState<LicenseTier>('safety_only');
+  const [attributionMode, setAttributionMode] = useState<AttributionMode>('anonymous');
+  const [consentChecked, setConsentChecked] = useState<boolean>(true);
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
 
-  // Initialize observed date/time to current local browser time
-  const [observedDateTimeInput, setObservedDateTimeInput] = useState<string>(() =>
-    toLocalDateTimeInputValue(new Date())
-  );
-  const [dateFieldError, setDateFieldError] = useState<string | null>(null);
-  const [evidenceLink, setEvidenceLink] = useState<string>('');
+  const [submittedReceipt, setSubmittedReceipt] = useState<{
+    id: string;
+    claimPin: string;
+    licenseTier: LicenseTier;
+    attributionMode: AttributionMode;
+  } | null>(null);
 
-  const [photoType, setPhotoType] = useState<'none' | 'figma-road-damage' | 'custom-upload'>('none');
-  const [customPhotoDataUrl, setCustomPhotoDataUrl] = useState<string | undefined>(undefined);
-  const [photoFilename, setPhotoFilename] = useState<string | undefined>(undefined);
-  const [containsGraphicContent, setContainsGraphicContent] = useState<boolean>(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [consentChecked, setConsentChecked] = useState<boolean>(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [submittedReceipt, setSubmittedReceipt] = useState<SignalReport | null>(null);
+  const activeCat = CATEGORY_OPTIONS.find((c) => c.key === categoryKey) || CATEGORY_OPTIONS[0];
 
-  const selectedCategoryObj =
-    CATEGORY_OPTIONS.find((c) => c.key === categoryKey) || CATEGORY_OPTIONS[0];
-
-  const validatedDateResult = useMemo(
-    () => validateObservedDateTime(observedDateTimeInput),
-    [observedDateTimeInput]
-  );
-
-  const handleSelectCategory = (key: HazardCategoryKey) => {
-    setCategoryKey(key);
-    if (key === 'collisions') {
-      setContainsGraphicContent(true);
-    }
-    setValidationError(null);
-  };
-
-  const handleDeviceLocation = () => {
-    setLocationError(null);
-    if (!navigator.geolocation) {
-      setLocationError('This browser does not provide device location. You can still submit the road and landmark.');
-      return;
-    }
-    if (!window.isSecureContext) {
-      setLocationError('Device location requires a secure HTTPS page. You can still submit the road and landmark.');
-      return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setDeviceLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        });
-        setLocating(false);
-      },
-      (error) => {
-        setLocationError(error.code === error.PERMISSION_DENIED
-          ? 'Location permission was declined. You can still submit the road and landmark.'
-          : 'Could not get a device location. You can still submit the road and landmark.');
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-    );
-  };
-
-  const handleDateTimeChange = (nextVal: string) => {
-    setObservedDateTimeInput(nextVal);
-    const check = validateObservedDateTime(nextVal);
-    setDateFieldError(check.valid ? null : check.error || 'Enter a valid observed date and time.');
-    if (check.valid) {
-      setValidationError(null);
-    }
-  };
-
-  const handleAdvanceToStep3 = () => {
-    if (!roadArea.trim()) {
-      setValidationError('Please enter the road or area name (for example, Khami Road or A5).');
-      return;
-    }
-    if (!landmark.trim()) {
-      setValidationError(
-        'Please provide a nearby landmark, turn-off, or junction so editors can locate the hazard.'
-      );
-      return;
-    }
-
-    const dateCheck = validateObservedDateTime(observedDateTimeInput);
-    if (!dateCheck.valid) {
-      const msg = dateCheck.error || 'Please enter a valid non-future observed date and time.';
-      setDateFieldError(msg);
-      setValidationError(msg);
-      return;
-    }
-
-    if (description.trim().length < 12) {
-      setValidationError(
-        'Please describe what you observed in at least 12 characters so the verification desk can assess it.'
-      );
-      return;
-    }
-
-    setDateFieldError(null);
-    setValidationError(null);
-    setStep(3);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setCustomPhotoName(file.name);
+    setIncludePhoto(true);
+    setLowBandwidth(false);
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setPhotoType('custom-upload');
-        setCustomPhotoDataUrl(reader.result);
-        setPhotoFilename(file.name);
+        setCustomPhotoPreview(reader.result);
       }
     };
     reader.readAsDataURL(file);
   };
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-
-    const dateCheck = validateObservedDateTime(observedDateTimeInput);
-    if (!dateCheck.valid || !dateCheck.normalizedReadable) {
-      const msg = dateCheck.error || 'Observed date and time is invalid.';
-      setDateFieldError(msg);
-      setValidationError(msg);
-      setStep(2);
-      return;
-    }
-
-    if (!consentChecked) {
-      setValidationError(
-        'Please confirm that you understand reports require human verification before publication.'
-      );
-      return;
-    }
-    setValidationError(null);
-    setIsSubmitting(true);
-
-    try {
-      const created = submitCitizenReport({
-        categoryKey,
-        categoryLabel: selectedCategoryObj.label,
-        roadArea: roadArea.trim(),
-        landmark: landmark.trim(),
-        description: description.trim(),
-        reportedDateTime: dateCheck.normalizedReadable,
-        observedIso: dateCheck.isoString,
-        evidenceLink: evidenceLink.trim() || undefined,
-        language,
-        photoType,
-        customPhotoDataUrl,
-        photoFilename,
-        containsGraphicContent,
-        reportedLat: deviceLocation?.lat,
-        reportedLng: deviceLocation?.lng,
-      });
-
-      setSubmittedReceipt(created);
-      setStep(4);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleUseCurrentLocation = () => {
+    setGpsStatus('Approximate Bulawayo corridor coordinates attached (-20.155, 28.568).');
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!consentChecked) return;
+
+    const submission: NewCitizenReportInput = {
+      categoryKey,
+      categoryLabel: activeCat.label,
+      roadArea: roadOrArea.trim() || 'A5 corridor (Bulawayo–Plumtree)',
+      landmark: landmark.trim() || 'Towards Plumtree',
+      reportedDateTime: '4 Nov 2026 · Just now',
+      description:
+        description.trim() ||
+        'Large potholes on the A5 towards Plumtree. Difficult to see at night.',
+      language,
+      photoType: customPhotoPreview
+        ? 'custom-upload'
+        : includePhoto
+          ? 'figma-road-damage'
+          : 'none',
+      customPhotoDataUrl: customPhotoPreview || undefined,
+      photoFilename: customPhotoName || undefined,
+      licenseTier,
+      attributionMode,
+    };
+
+    const result = submitCitizenReport(submission);
+    const formattedId = result.id.startsWith('#') ? result.id : `#${result.id}`;
+    setSubmittedReceipt({
+      id: formattedId,
+      claimPin: result.claimPin || '4920',
+      licenseTier,
+      attributionMode,
+    });
+    setStep(4);
+  };
+
+  const renderProgressBar = () => (
+    <div
+      data-node-id="83:116"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: '8px',
+        width: '100%',
+      }}
+    >
+      {[
+        { num: 1, label: '1. What happened?' },
+        { num: 2, label: '2. Where?' },
+        { num: 3, label: '3. Details' },
+      ].map((item) => {
+        const isCompletedOrCurrent = step >= item.num;
+        const isCurrent = step === item.num;
+        return (
+          <button
+            key={item.num}
+            type="button"
+            onClick={() => {
+              if (item.num < step) setStep(item.num as ReportStep);
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              textAlign: 'left',
+              cursor: item.num < step ? 'pointer' : 'default',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                height: '4px',
+                borderRadius: '2px',
+                background: isCompletedOrCurrent ? '#176b45' : '#d9e1db',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: isCurrent ? 500 : 400,
+                fontSize: '15px',
+                lineHeight: 1.5,
+                color: isCurrent ? '#176b45' : '#5d6b63',
+              }}
+            >
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderLowBandwidthSwitch = () => (
+    <div
+      data-node-id="83:159"
+      style={{
+        background: '#edf4ef',
+        borderRadius: '6px',
+        padding: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+        width: '100%',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <span
+          style={{
+            fontFamily: 'var(--pz-font-sans)',
+            fontWeight: 500,
+            fontSize: '14px',
+            lineHeight: 1.5,
+            color: '#202a24',
+          }}
+        >
+          Low-bandwidth mode · {lowBandwidth ? 'On' : 'Off'}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--pz-font-sans)',
+            fontWeight: 400,
+            fontSize: '14px',
+            lineHeight: 1.5,
+            color: '#5d6b63',
+          }}
+        >
+          Text only. No photo or map download needed.
+        </span>
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={lowBandwidth}
+        onClick={() => setLowBandwidth((prev) => !prev)}
+        style={{
+          width: '40px',
+          height: '24px',
+          borderRadius: '20px',
+          background: lowBandwidth ? '#176b45' : '#94a3b8',
+          border: 'none',
+          padding: '3px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: lowBandwidth ? 'flex-end' : 'flex-start',
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            width: '18px',
+            height: '18px',
+            borderRadius: '50%',
+            background: '#ffffff',
+            display: 'block',
+          }}
+        />
+      </button>
+    </div>
+  );
+
   // =========================================================================
-  // STEP 4: SUBMISSION CONFIRMATION RECEIPT
+  // STEP 4: POST-SUBMISSION CLAIM RECEIPT (83:499)
   // =========================================================================
   if (step === 4 && submittedReceipt) {
     return (
-      <div className="pz-report-container" style={{ maxWidth: '720px' }}>
-        <div className="pz-card-panel" style={{ padding: '26px', gap: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '6px',
-                background: 'var(--pz-active-surface)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <img src={ASSETS.receiptInbox} alt="" style={{ width: '24px', height: '24px' }} />
-            </div>
-            <div>
-              <span className="pz-badge pz-badge-amber">
-                Pending editorial review · Not published publicly
-              </span>
-              <h1 className="pz-page-title" style={{ marginTop: '6px', fontSize: '26px' }}>
-                Demo report received for verification
-              </h1>
-            </div>
-          </div>
+      <div
+        data-node-id="83:499"
+        style={{
+          width: '100%',
+          maxWidth: '620px',
+          margin: '0 auto',
+          padding: '76px 20px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '18px',
+        }}
+      >
+        <h1
+          data-node-id="105:633"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--pz-font-serif)',
+            fontWeight: 500,
+            fontSize: '32px',
+            lineHeight: 1.05,
+            letterSpacing: '-0.64px',
+            color: '#0f172a',
+          }}
+        >
+          ✓ Report received
+        </h1>
 
-          <p style={{ fontSize: '14.5px', color: 'var(--pz-muted)' }}>
-            Thank you. Your report has been queued in the Panzira AI Bulawayo newsroom inbox.
-            Automated intake structures incoming submissions to assist journalists, and{' '}
-            <strong>never automatically publishes road warnings</strong>.
-          </p>
+        <p
+          data-node-id="105:634"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--pz-font-sans)',
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: '#475569',
+          }}
+        >
+          This is a fictional confirmation. No real report has been submitted.
+        </p>
+
+        {/* Private Guest Claim Receipt Box */}
+        <div
+          data-node-id="105:635"
+          style={{
+            background: '#f8fafc',
+            border: '1px dashed #94a3b8',
+            borderRadius: '6px',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <span
+            data-node-id="105:636"
+            style={{
+              fontFamily: 'var(--pz-font-sans)',
+              fontWeight: 500,
+              fontSize: '11px',
+              color: '#047857',
+              letterSpacing: '0.02em',
+            }}
+          >
+            YOUR PRIVATE CLAIM RECEIPT
+          </span>
+
+          <span
+            data-node-id="105:637"
+            style={{
+              fontFamily: 'var(--pz-font-mono)',
+              fontWeight: 500,
+              fontSize: '11px',
+              letterSpacing: '0.44px',
+              color: '#475569',
+            }}
+          >
+            REPORT REFERENCE
+          </span>
+
+          <span
+            data-node-id="105:638"
+            style={{
+              fontFamily: 'var(--pz-font-mono)',
+              fontWeight: 600,
+              fontSize: '15px',
+              letterSpacing: '0.48px',
+              color: '#0f172a',
+            }}
+          >
+            {submittedReceipt.id}
+          </span>
 
           <div
-            className="pz-notice-box"
+            data-node-id="105:639"
             style={{
-              border: '1px solid var(--pz-border)',
+              background: '#fffbeb',
               borderRadius: '6px',
-              padding: '16px',
-              gap: '6px',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
             }}
           >
-            <div className="pz-field-label">Submission reference</div>
-            <div
+            <span
+              data-node-id="105:640"
               style={{
-                fontSize: '24px',
-                fontWeight: 700,
-                letterSpacing: '-0.02em',
-                color: 'var(--pz-primary-green)',
+                fontFamily: 'var(--pz-font-mono)',
+                fontWeight: 500,
+                fontSize: '11px',
+                letterSpacing: '0.44px',
+                color: '#92400e',
               }}
             >
-              {submittedReceipt.id}
-            </div>
-            <div style={{ fontSize: '14px', color: 'var(--pz-text)' }}>
-              <strong>{submittedReceipt.categoryLabel}</strong> · {submittedReceipt.roadArea} (
-              {submittedReceipt.landmark})
-            </div>
-            <div style={{ fontSize: '13px', color: 'var(--pz-muted)' }}>
-              Observed: {submittedReceipt.reportedDateTime} · Status: Unverified lead (0 of 4
-              editorial checks completed)
-              {submittedReceipt.isGraphicImage
-                ? ' · Flagged attachment kept hidden from public display'
-                : ''}
-            </div>
+              CLAIM PIN
+            </span>
+            <span
+              data-node-id="105:641"
+              style={{
+                fontFamily: 'var(--pz-font-mono)',
+                fontWeight: 600,
+                fontSize: '15px',
+                letterSpacing: '0.48px',
+                color: '#0f172a',
+              }}
+            >
+              {submittedReceipt.claimPin}
+            </span>
+            <span
+              data-node-id="105:642"
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '12px',
+                color: '#92400e',
+              }}
+            >
+              Keep this PIN private. It proves this guest report is yours.
+            </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <h2 className="pz-subsection-heading">What happens next</h2>
-            <div style={{ fontSize: '14px', color: 'var(--pz-text)', display: 'grid', gap: '6px' }}>
-              <div>
-                <strong>1. Intake structuring:</strong> Extracts road name, hazard category, and
-                draft translation if submitted in Shona or Ndebele.
-              </div>
-              <div>
-                <strong>2. Human corroboration:</strong> Editors check landmark accuracy, media
-                recency, and independent witnesses.
-              </div>
-              <div>
-                <strong>3. Editor approval gate:</strong> Only after all 4 checks pass can an editor
-                publish a verified alert to the Bulawayo map.
-              </div>
-            </div>
-          </div>
-
-          <div
+          <span
+            data-node-id="105:643"
             style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '12px',
-              marginTop: '6px',
+              fontFamily: 'var(--pz-font-sans)',
+              fontWeight: 500,
+              fontSize: '10px',
+              color: '#92400e',
             }}
           >
-            <button
-              type="button"
-              className="pz-btn-primary"
-              onClick={() => navigateNewsroom('verify', submittedReceipt.id)}
-            >
-              View in demo newsroom ({submittedReceipt.id}) →
-            </button>
-            <button
-              type="button"
-              className="pz-btn-secondary"
-              onClick={() => navigatePublic('my-reports')}
-            >
-              Track in My Reports
-            </button>
-            <button
-              type="button"
-              className="pz-btn-secondary"
-              onClick={() => navigatePublic('overview')}
-            >
-              Return to overview
-            </button>
-          </div>
+            PENDING EDITORIAL REVIEW · NOT PUBLIC
+          </span>
         </div>
+
+        <h2
+          data-node-id="105:644"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--pz-font-serif)',
+            fontWeight: 500,
+            fontSize: '21px',
+            lineHeight: 1.05,
+            letterSpacing: '-0.42px',
+            color: '#0f172a',
+          }}
+        >
+          Track verification. Claim your media royalties.
+        </h2>
+
+        <button
+          type="button"
+          data-node-id="105:645"
+          onClick={() => {
+            setPendingClaimPrefill({
+              reference: submittedReceipt.id,
+              pin: submittedReceipt.claimPin,
+            });
+            navigateAuth('citizen-signup');
+          }}
+          style={{
+            width: '100%',
+            background: '#176b45',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '14px 18px',
+            fontFamily: 'var(--pz-font-sans)',
+            fontWeight: 500,
+            fontSize: '16px',
+            lineHeight: 1.5,
+            textAlign: 'left',
+            cursor: 'pointer',
+          }}
+        >
+          Create Account to Track &amp; Receive EcoCash Royalties
+        </button>
+
+        <p
+          data-node-id="105:647"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--pz-font-sans)',
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: '#475569',
+          }}
+        >
+          Use this receipt to link your report. You choose your media license; ownership stays with
+          you.
+        </p>
+
+        <button
+          type="button"
+          data-node-id="105:648"
+          onClick={() => navigatePublic('map')}
+          style={{
+            width: '100%',
+            height: '48px',
+            background: '#ffffff',
+            border: 'none',
+            borderRadius: '6px',
+            color: '#176b45',
+            fontFamily: 'var(--pz-font-sans)',
+            fontWeight: 500,
+            fontSize: '16px',
+            cursor: 'pointer',
+          }}
+        >
+          Return to Live Map
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="pz-report-container">
-      {/* Back link & Step Header */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div
+      style={{
+        width: '100%',
+        maxWidth: '680px',
+        margin: '0 auto',
+        padding: '40px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '28px',
+      }}
+    >
+      {/* Top Eyebrow */}
+      <p
+        style={{
+          margin: 0,
+          fontFamily: 'var(--pz-font-sans)',
+          fontSize: '14px',
+          lineHeight: 1.5,
+          color: '#5d6b63',
+        }}
+      >
+        {step === 3 ? 'Report a hazard · Step 3 of 3' : 'Report a hazard'}
+      </p>
+
+      {/* 3-Step Segmented Progress Bar */}
+      {renderProgressBar()}
+
+      {/* =====================================================================
+          STEP 1: 01 · What happened? (83:96)
+          ===================================================================== */}
+      {step === 1 && (
         <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-          }}
+          data-node-id="83:96"
+          style={{ display: 'flex', flexDirection: 'column', gap: '28px', width: '100%' }}
         >
-          <button
-            type="button"
-            onClick={() =>
-              step === 1 ? navigatePublic('overview') : setStep((s) => (s - 1) as 1 | 2)
-            }
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h1
+              data-node-id="83:128"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-serif)',
+                fontWeight: 500,
+                fontSize: '32px',
+                lineHeight: 1.05,
+                letterSpacing: '-0.64px',
+                color: '#202a24',
+              }}
+            >
+              What happened?
+            </h1>
+            <p
+              data-node-id="83:129"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '16px',
+                lineHeight: 1.5,
+                color: '#5d6b63',
+              }}
+            >
+              Choose the category that best describes the hazard.
+            </p>
+          </div>
+
+          {/* 2x2 Category Grid */}
+          <div
+            data-node-id="83:130"
             style={{
-              background: 'transparent',
-              border: 'none',
-              padding: '4px 0',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: 'var(--pz-primary-green)',
-              fontWeight: 600,
-              fontSize: '13.5px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '12px',
+              width: '100%',
             }}
           >
-            <img src={ASSETS.arrowLeft} alt="" style={{ width: '16px', height: '16px' }} />
-            <span>{step === 1 ? 'Back to Bulawayo overview' : 'Previous step'}</span>
-          </button>
-
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pz-muted)' }}>
-            Step {step} of 3
-          </span>
-        </div>
-
-        <div className="pz-progress-track" aria-label={`Reporting step ${step} of 3`}>
-          <div className={`pz-progress-seg ${step >= 1 ? 'is-filled' : ''}`} />
-          <div className={`pz-progress-seg ${step >= 2 ? 'is-filled' : ''}`} />
-          <div className={`pz-progress-seg ${step >= 3 ? 'is-filled' : ''}`} />
-        </div>
-      </div>
-
-      {/* Explicit Verification Requirement Notice */}
-      <div className="pz-notice-box-bordered">
-        <p style={{ fontSize: '13.5px', color: 'var(--pz-text)' }}>
-          <strong>Verification required before publication:</strong> Citizen reports enter our
-          newsroom inbox as unverified leads and are never auto-published by AI. In a
-          life-threatening emergency, contact Zimbabwe Republic Police or ambulance services
-          directly.
-        </p>
-      </div>
-
-      <div className="pz-report-split">
-        {/* =================================================================
-            LEFT COLUMN: ACTIVE WIZARD STEP
-            ================================================================= */}
-        <form
-          onSubmit={handleFinalSubmit}
-          noValidate
-          style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
-        >
-          {validationError && (
-            <div
-              className="pz-missing-panel"
-              role="alert"
-              style={{ borderColor: 'var(--pz-red)' }}
-            >
-              <strong style={{ color: 'var(--pz-red)', fontSize: '13.5px' }}>
-                Please check your submission:
-              </strong>
-              <span style={{ fontSize: '13.5px', color: 'var(--pz-text)' }}>{validationError}</span>
-            </div>
-          )}
-
-          {/* STEP 1: HAZARD CATEGORY */}
-          {step === 1 && (
-            <>
-              <div>
-                <h1 className="pz-page-title">Report a road hazard</h1>
-                <p className="pz-page-subtitle">
-                  What kind of road condition did you observe? Choose the closest category.
-                </p>
-              </div>
-
-              <div
-                role="radiogroup"
-                aria-label="Hazard category"
-                style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
-              >
-                {CATEGORY_OPTIONS.map((opt) => {
-                  const selected = categoryKey === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      className={`pz-category-option ${selected ? 'is-selected' : ''}`}
-                      onClick={() => handleSelectCategory(opt.key)}
-                    >
-                      <img
-                        src={opt.icon}
-                        alt=""
-                        style={{ width: '24px', height: '24px', flexShrink: 0 }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '15.5px', color: 'var(--pz-text)' }}>
-                          {opt.label}
-                        </div>
-                        <div style={{ fontSize: '13.5px', color: 'var(--pz-muted)', marginTop: '2px' }}>
-                          {opt.description}
-                        </div>
-                      </div>
-                      <img
-                        src={selected ? ASSETS.radioChecked : ASSETS.radioUnchecked}
-                        alt=""
-                        style={{ width: '20px', height: '20px', flexShrink: 0 }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginTop: '6px',
-                  flexWrap: 'wrap',
-                }}
-              >
+            {CATEGORY_OPTIONS.map((option) => {
+              const selected = option.key === categoryKey;
+              return (
                 <button
+                  key={option.key}
                   type="button"
-                  className="pz-btn-secondary"
-                  onClick={() => navigatePublic('overview')}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="pz-btn-primary"
-                  onClick={() => {
-                    setStep(2);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                >
-                  Next: location & details →
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* STEP 2: LOCATION, VALIDATED DATE/TIME, DESCRIPTION & SOURCE LINK */}
-          {step === 2 && (
-            <>
-              <div>
-                <h1 className="pz-page-title">Where and what happened?</h1>
-                <p className="pz-page-subtitle">
-                  Include a specific landmark or turn-off so Bulawayo editors can verify the exact
-                  segment.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div
+                  onClick={() => setCategoryKey(option.key)}
                   style={{
+                    minHeight: '112px',
+                    padding: '18px',
+                    borderRadius: '6px',
+                    background: selected ? '#edf4ef' : '#ffffff',
+                    border: selected ? '2px solid #176b45' : '1px solid #d9e1db',
                     display: 'flex',
-                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '8px',
-                    flexWrap: 'wrap',
+                    gap: '12px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
                   }}
                 >
-                  <label htmlFor="pz-road-input" style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                    Road or corridor *
-                  </label>
-                  <button
-                    type="button"
-                    className="pz-portal-link-btn"
-                    style={{ height: '34px', fontSize: '12px' }}
-                    onClick={handleDeviceLocation}
-                    disabled={locating}
-                  >
-                    <img src={ASSETS.locateFixed} alt="" style={{ width: '14px', height: '14px' }} />
-                    <span>{locating ? 'Finding location…' : deviceLocation ? 'Refresh my location' : 'Use my location (optional)'}</span>
-                  </button>
-                </div>
-                <input
-                  id="pz-road-input"
-                  className="pz-input"
-                  type="text"
-                  value={roadArea}
-                  onChange={(e) => setRoadArea(e.target.value)}
-                  placeholder="e.g. A5 Bulawayo–Plumtree Road, Khami Road, 12th Avenue"
-                />
-                <p className="pz-page-subtitle" role={locationError ? 'alert' : 'status'}>
-                  {locationError || (deviceLocation
-                    ? `Location captured with about ${Math.round(deviceLocation.accuracy)} m accuracy. Shared with newsroom editors to locate this report.`
-                    : 'Your browser asks permission before sharing location. Coordinates are optional and are not shown on the public map.')}
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                  {[
-                    'A5 Bulawayo–Plumtree Road',
-                    'Khami Road, Mzilikazi',
-                    'Lobengula St & 12th Ave',
-                    'Esigodini Road (A7)',
-                  ].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setRoadArea(preset)}
-                      style={{
-                        background: 'var(--pz-pale)',
-                        border: '1px solid var(--pz-border)',
-                        borderRadius: '4px',
-                        padding: '5px 9px',
-                        fontSize: '12px',
-                        color: 'var(--pz-text)',
-                      }}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label htmlFor="pz-landmark-input" style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                  Exact landmark, junction, or kilometre peg *
-                </label>
-                <input
-                  id="pz-landmark-input"
-                  className="pz-input"
-                  type="text"
-                  value={landmark}
-                  onChange={(e) => setLandmark(e.target.value)}
-                  placeholder="e.g. 400m past Plumtree turn-off, city-bound lane"
-                />
-              </div>
-
-              <CorridorContextMap
-                mode="report-preview"
-                landmarkLabel={landmark || roadArea || 'Bulawayo corridor preview'}
-                height={200}
-              />
-
-              <div className="pz-extract-2col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label htmlFor="pz-lang-select" style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                    Report language
-                  </label>
-                  <select
-                    id="pz-lang-select"
-                    className="pz-select"
-                    value={language}
-                    onChange={(e) =>
-                      setLanguage(e.target.value as 'English' | 'Shona' | 'Ndebele')
-                    }
-                  >
-                    <option value="English">English</option>
-                    <option value="Shona">Shona (ChiShona)</option>
-                    <option value="Ndebele">Ndebele (IsiNdebele)</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label htmlFor="pz-time-input" style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                    Observed date & time *
-                  </label>
-                  <input
-                    id="pz-time-input"
-                    className={`pz-input ${dateFieldError ? 'is-invalid' : ''}`}
-                    type="datetime-local"
-                    value={observedDateTimeInput}
-                    max={toLocalDateTimeInputValue(new Date())}
-                    min="2020-01-01T00:00"
-                    aria-invalid={Boolean(dateFieldError)}
-                    aria-describedby="pz-time-help"
-                    onChange={(e) => handleDateTimeChange(e.target.value)}
+                  <img
+                    src={option.icon}
+                    alt=""
+                    style={{ width: '24px', height: '24px', flexShrink: 0 }}
                   />
-                  <span
-                    id="pz-time-help"
-                    style={{
-                      fontSize: '12px',
-                      color: dateFieldError ? 'var(--pz-red)' : 'var(--pz-muted)',
-                      fontWeight: dateFieldError ? 600 : 400,
-                    }}
-                  >
-                    {dateFieldError
-                      ? dateFieldError
-                      : validatedDateResult.normalizedReadable
-                        ? `Recorded as ${validatedDateResult.normalizedReadable} (local time)`
-                        : 'Select the date and time you observed the hazard (cannot be in the future).'}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label htmlFor="pz-desc-input" style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                  Hazard description *
-                </label>
-                <textarea
-                  id="pz-desc-input"
-                  className="pz-textarea"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={
-                    language === 'Shona'
-                      ? 'e.g. Pane gomba guru pakati pemugwagwa pedyo nePlumtree turn-off...'
-                      : 'Describe the road hazard, which lane is affected, and whether vehicles are swerving or blocked...'
-                  }
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label htmlFor="pz-link-input" style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                  Public source or evidence link (optional)
-                </label>
-                <input
-                  id="pz-link-input"
-                  className="pz-input"
-                  type="url"
-                  value={evidenceLink}
-                  onChange={(e) => setEvidenceLink(e.target.value)}
-                  placeholder="https://... (optional public post or council notice URL)"
-                />
-                <span style={{ fontSize: '12px', color: 'var(--pz-muted)' }}>
-                  Only share publicly accessible links. Panzira AI never scrapes private WhatsApp
-                  groups.
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '12px',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <button
-                  type="button"
-                  className="pz-btn-secondary"
-                  onClick={() => setStep(1)}
-                >
-                  ← Back
-                </button>
-                <button
-                  type="button"
-                  className="pz-btn-primary"
-                  onClick={handleAdvanceToStep3}
-                >
-                  Next: optional photo & consent →
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* STEP 3: OPTIONAL IMAGE (PUBLIC-SAFE, NO REVEAL CONTROLS) & CONSENT */}
-          {step === 3 && (
-            <>
-              <div>
-                <h1 className="pz-page-title">Optional photo & review</h1>
-                <p className="pz-page-subtitle">
-                  Photos help editors verify landmarks, while text-only submissions work cleanly on
-                  low-data connections.
-                </p>
-              </div>
-
-              {/* Photo Attachment Controls */}
-              <div className="pz-card-panel">
-                <div style={{ fontWeight: 600, fontSize: '14.5px' }}>
-                  Optional photograph (never take photos while driving)
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                  <label
-                    className="pz-btn-secondary"
-                    style={{ minHeight: '40px', fontSize: '13px', cursor: 'pointer' }}
-                  >
-                    <span>Upload image file…</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    className={`pz-btn-tonal ${photoType === 'figma-road-damage' ? 'is-active' : ''
-                      }`}
-                    style={{ minHeight: '40px', fontSize: '13px' }}
-                    onClick={() => {
-                      setPhotoType('figma-road-damage');
-                      setPhotoFilename('bulawayo-road-damage-demo.jpg');
-                      setCustomPhotoDataUrl(undefined);
-                    }}
-                  >
-                    Attach demo pothole photo
-                  </button>
-
-                  <button
-                    type="button"
-                    className="pz-btn-secondary"
-                    style={{ minHeight: '40px', fontSize: '13px' }}
-                    onClick={() => {
-                      setPhotoType('none');
-                      setPhotoFilename(undefined);
-                      setCustomPhotoDataUrl(undefined);
-                    }}
-                  >
-                    No photo (low-bandwidth)
-                  </button>
-                </div>
-
-                {photoType !== 'none' && (
                   <div
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '10px',
-                      marginTop: '6px',
+                      gap: '4px',
+                      flex: '1 1 auto',
+                      minWidth: 0,
                     }}
                   >
-                    <label
+                    <span
                       style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '8px',
-                        fontSize: '13.5px',
-                        cursor: 'pointer',
-                        background: 'var(--pz-missing-bg)',
-                        padding: '10px 12px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--pz-border)',
+                        fontFamily: 'var(--pz-font-sans)',
+                        fontWeight: 500,
+                        fontSize: '16px',
+                        lineHeight: 1.5,
+                        color: '#202a24',
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={containsGraphicContent || categoryKey === 'collisions'}
-                        disabled={categoryKey === 'collisions'}
-                        onChange={(e) => setContainsGraphicContent(e.target.checked)}
-                        style={{ marginTop: '3px' }}
-                      />
-                      <span>
-                        <strong>Graphic-image safety notice:</strong>{' '}
-                        {categoryKey === 'collisions'
-                          ? 'Collision attachments are automatically flagged as potentially distressing, hidden here, blurred in the newsroom workspace, and never shown publicly.'
-                          : 'Mark if this photo shows a vehicle crash, injured people, or distressing scene (keeps image hidden here and excluded from public display).'}
-                      </span>
-                    </label>
-
-                    {/* Public-safe preview: allowEditorReveal is strictly false */}
-                    <EvidencePhotoFrame
-                      photoType={photoType}
-                      customPhotoDataUrl={customPhotoDataUrl}
-                      isGraphic={containsGraphicContent || categoryKey === 'collisions'}
-                      isRevealed={false}
-                      allowEditorReveal={false}
-                      height={180}
-                    />
+                      {option.label}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--pz-font-sans)',
+                        fontWeight: 400,
+                        fontSize: '14px',
+                        lineHeight: 1.5,
+                        color: '#5d6b63',
+                      }}
+                    >
+                      {option.subtitle}
+                    </span>
                   </div>
-                )}
-              </div>
+                  <img
+                    src={selected ? ASSETS.radioChecked : ASSETS.radioUnchecked}
+                    alt=""
+                    style={{ width: '20px', height: '20px', flexShrink: 0 }}
+                  />
+                </button>
+              );
+            })}
+          </div>
 
-              {/* Submission Summary */}
-              <div
-                className="pz-notice-box"
-                style={{ borderRadius: '6px', gap: '8px', padding: '16px' }}
-              >
-                <div className="pz-field-label">Review your report</div>
-                <div style={{ fontSize: '14px' }}>
-                  <strong>Category:</strong> {selectedCategoryObj.label}
-                </div>
-                <div style={{ fontSize: '14px' }}>
-                  <strong>Location:</strong> {roadArea} · {landmark}
-                </div>
-                <div style={{ fontSize: '14px' }}>
-                  <strong>Observed:</strong>{' '}
-                  {validatedDateResult.normalizedReadable || observedDateTimeInput} ({language})
-                </div>
-                <div style={{ fontSize: '14px' }}>
-                  <strong>Description:</strong> “{description}”
-                </div>
-                <div style={{ fontSize: '14px' }}>
-                  <strong>Attachment:</strong>{' '}
-                  {photoType === 'none'
-                    ? 'None (low-bandwidth text report)'
-                    : `${photoFilename || 'Attached photo'}${containsGraphicContent || categoryKey === 'collisions'
-                      ? ' (flagged as restricted — hidden on public views)'
-                      : ''
-                    }`}
-                </div>
-              </div>
+          {renderLowBandwidthSwitch()}
 
-              {/* Consent Checkbox */}
+          <p
+            data-node-id="83:165"
+            style={{
+              margin: 0,
+              fontFamily: 'var(--pz-font-sans)',
+              fontSize: '14px',
+              lineHeight: 1.5,
+              color: '#5d6b63',
+            }}
+          >
+            Stay safe. Do not stop in traffic or put yourself at risk to report.
+          </p>
+
+          <div
+            data-node-id="83:166"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: '8px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => navigatePublic('overview')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#176b45',
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '16px',
+                height: '48px',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              style={{
+                background: '#176b45',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                height: '48px',
+                padding: '0 22px',
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '16px',
+                cursor: 'pointer',
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          STEP 2: 02 · Where is it? (83:247)
+          ===================================================================== */}
+      {step === 2 && (
+        <div
+          data-node-id="83:247"
+          style={{ display: 'flex', flexDirection: 'column', gap: '28px', width: '100%' }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h1
+              data-node-id="83:279"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-serif)',
+                fontWeight: 500,
+                fontSize: '32px',
+                lineHeight: 1.05,
+                letterSpacing: '-0.64px',
+                color: '#202a24',
+              }}
+            >
+              Where is the hazard?
+            </h1>
+            <p
+              data-node-id="83:280"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '16px',
+                lineHeight: 1.5,
+                color: '#5d6b63',
+              }}
+            >
+              A road name or nearby place is enough to start.
+            </p>
+          </div>
+
+          {/* Field 1: Road or place */}
+          <div
+            data-node-id="83:281"
+            style={{ display: 'flex', flexDirection: 'column', gap: '7px', width: '100%' }}
+          >
+            <label
+              htmlFor="pz-v3-road-input"
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '14px',
+                color: '#202a24',
+              }}
+            >
+              Road or place
+            </label>
+            <input
+              id="pz-v3-road-input"
+              type="text"
+              value={roadOrArea}
+              onChange={(e) => setRoadOrArea(e.target.value)}
+              placeholder="A5 corridor (Bulawayo–Plumtree)"
+              style={{
+                width: '100%',
+                minHeight: '50px',
+                padding: '12px 14px',
+                borderRadius: '6px',
+                border: '1px solid #d9e1db',
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '16px',
+                color: '#202a24',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '14px',
+                color: '#5d6b63',
+              }}
+            >
+              Bulawayo, Zimbabwe
+            </span>
+          </div>
+
+          {/* Field 2: Nearby landmark or direction */}
+          <div
+            data-node-id="83:286"
+            style={{ display: 'flex', flexDirection: 'column', gap: '7px', width: '100%' }}
+          >
+            <label
+              htmlFor="pz-v3-landmark-input"
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '14px',
+                color: '#202a24',
+              }}
+            >
+              Nearby landmark or direction (optional)
+            </label>
+            <input
+              id="pz-v3-landmark-input"
+              type="text"
+              value={landmark}
+              onChange={(e) => setLandmark(e.target.value)}
+              placeholder="Towards Plumtree"
+              style={{
+                width: '100%',
+                minHeight: '50px',
+                padding: '12px 14px',
+                borderRadius: '6px',
+                border: '1px solid #d9e1db',
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '16px',
+                color: '#202a24',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '14px',
+                color: '#5d6b63',
+              }}
+            >
+              Add a junction, landmark or approximate distance if you know it.
+            </span>
+          </div>
+
+          {/* Optional GPS helper */}
+          <button
+            type="button"
+            data-node-id="83:291"
+            onClick={handleUseCurrentLocation}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              height: '48px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer',
+              color: '#176b45',
+              fontFamily: 'var(--pz-font-sans)',
+              fontWeight: 500,
+              fontSize: '15px',
+            }}
+          >
+            <img src={ASSETS.locateFixed} alt="" style={{ width: '22px', height: '22px' }} />
+            <span>{gpsStatus || 'Use my current location (optional)'}</span>
+          </button>
+
+          {/* Location uncertainty box */}
+          <div
+            data-node-id="83:295"
+            style={{
+              background: '#f6f8f6',
+              border: '1px solid #d9e1db',
+              borderRadius: '6px',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              fontSize: '14px',
+            }}
+          >
+            <span style={{ fontWeight: 500, color: '#202a24' }}>Approximate location</span>
+            <span style={{ color: '#5d6b63' }}>
+              Exact location is not independently confirmed. You can continue without sharing GPS.
+            </span>
+          </div>
+
+          {renderLowBandwidthSwitch()}
+
+          <div
+            data-node-id="83:304"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: '8px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#176b45',
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '16px',
+                height: '48px',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              ← Back
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStep(3)}
+              style={{
+                background: '#176b45',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                height: '48px',
+                padding: '0 22px',
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '16px',
+                cursor: 'pointer',
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          STEP 3: ReportHazardView · Photo upload & rights (83:370)
+          ===================================================================== */}
+      {step === 3 && (
+        <form
+          data-node-id="83:370"
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h1
+              data-node-id="83:402"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-serif)',
+                fontWeight: 500,
+                fontSize: '32px',
+                lineHeight: 1.05,
+                letterSpacing: '-0.64px',
+                color: '#202a24',
+              }}
+            >
+              Add details and submit
+            </h1>
+            <p
+              data-node-id="83:403"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '16px',
+                lineHeight: 1.5,
+                color: '#5d6b63',
+              }}
+            >
+              Tell us what you saw. Photos are optional.
+            </p>
+          </div>
+
+          {/* Short Description + Language Selector */}
+          <div
+            data-node-id="83:404"
+            style={{ display: 'flex', flexDirection: 'column', gap: '7px', width: '100%' }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
               <label
-                className="pz-checklist-row"
+                htmlFor="pz-v3-desc-input"
                 style={{
-                  border: '1px solid var(--pz-border)',
-                  padding: '12px',
-                  background: consentChecked ? 'var(--pz-active-surface)' : 'var(--pz-white)',
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontWeight: 500,
+                  fontSize: '14px',
+                  color: '#202a24',
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={consentChecked}
-                  onChange={(e) => {
-                    setConsentChecked(e.target.checked);
-                    if (e.target.checked) setValidationError(null);
-                  }}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', flexShrink: 0 }}
-                />
-                <span style={{ fontSize: '13.5px', color: 'var(--pz-text)' }}>
-                  I confirm this opt-in report is submitted for editorial verification in the
-                  Panzira AI demo. I understand it requires human corroboration and will{' '}
-                  <strong>not</strong> be auto-published. *
-                </span>
+                Short description
               </label>
+              <div style={{ display: 'inline-flex', gap: '6px' }}>
+                {(['English', 'Shona', 'Ndebele'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setLanguage(lang)}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      border: language === lang ? '1px solid #176b45' : '1px solid #d9e1db',
+                      background: language === lang ? '#edf4ef' : '#ffffff',
+                      color: language === lang ? '#176b45' : '#5d6b63',
+                      fontSize: '12px',
+                      fontWeight: language === lang ? 600 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            </div>
 
+            <textarea
+              id="pz-v3-desc-input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              style={{
+                width: '100%',
+                minHeight: '108px',
+                padding: '12px',
+                borderRadius: '6px',
+                border: '1px solid #d9e1db',
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '16px',
+                lineHeight: 1.5,
+                color: '#202a24',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+
+          {/* Photo upload · Live camera or gallery (83:408) */}
+          <div
+            data-node-id="83:408"
+            style={{
+              background: '#ffffff',
+              border: '1px dashed #94a3b8',
+              borderRadius: '6px',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span
+                data-node-id="108:532"
+                style={{
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontSize: '15px',
+                  color: '#0f172a',
+                }}
+              >
+                Add photo or evidence (optional)
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIncludePhoto((prev) => !prev);
+                  if (!includePhoto) setLowBandwidth(false);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#176b45',
+                  fontSize: '12.5px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                {includePhoto ? 'Remove attached photo' : 'Attach sample A5 pothole photo'}
+              </button>
+            </div>
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
+
+            <div
+              data-node-id="108:533"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '12px',
+              }}
+            >
+              <button
+                type="button"
+                data-node-id="108:534"
+                onClick={() => cameraInputRef.current?.click()}
+                style={{
+                  height: '46px',
+                  background: '#f1f5f9',
+                  border: '1px solid #94a3b8',
+                  borderRadius: '6px',
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontWeight: 500,
+                  fontSize: '13px',
+                  color: '#0f172a',
+                  cursor: 'pointer',
+                }}
+              >
+                Live Camera
+              </button>
+
+              <button
+                type="button"
+                data-node-id="108:536"
+                onClick={() => galleryInputRef.current?.click()}
+                style={{
+                  height: '46px',
+                  background: '#f1f5f9',
+                  border: '1px solid #94a3b8',
+                  borderRadius: '6px',
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontWeight: 500,
+                  fontSize: '13px',
+                  color: '#0f172a',
+                  cursor: 'pointer',
+                }}
+              >
+                Gallery Upload
+              </button>
+            </div>
+
+            {includePhoto && (
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
                   gap: '12px',
-                  flexWrap: 'wrap',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '10px',
                 }}
               >
-                <button
-                  type="button"
-                  className="pz-btn-secondary"
-                  onClick={() => setStep(2)}
-                >
-                  ← Edit details
-                </button>
-                <button type="submit" className="pz-btn-primary" disabled={isSubmitting}>
-                  {isSubmitting ? 'Submitting report...' : 'Submit demo report for verification'}
-                </button>
+                <img
+                  src={customPhotoPreview || ASSETS.citizenPhotoAndMap}
+                  alt="Selected road hazard evidence"
+                  style={{
+                    width: '80px',
+                    height: '52px',
+                    objectFit: 'cover',
+                    borderRadius: '4px',
+                  }}
+                />
+                <div style={{ fontSize: '12.5px', color: '#0f172a' }}>
+                  <strong>{customPhotoName || 'A5_Plumtree_Pothole_Capture.jpg'}</strong>
+                  <div style={{ color: '#475569', fontSize: '11.5px' }}>
+                    Ready for EXIF &amp; AI authenticity screening
+                  </div>
+                </div>
               </div>
-            </>
-          )}
+            )}
+
+            <span
+              data-node-id="108:538"
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '12px',
+                color: '#475569',
+              }}
+            >
+              Only upload original media you captured. You can always report without a photo.
+            </span>
+          </div>
+
+          {/* Your Content Rights & Privacy (105:591) */}
+          <div
+            data-node-id="105:591"
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <h2
+              data-node-id="105:592"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-serif)',
+                fontWeight: 500,
+                fontSize: '26px',
+                lineHeight: 1.05,
+                letterSpacing: '-0.52px',
+                color: '#0f172a',
+              }}
+            >
+              Your Content Rights &amp; Privacy
+            </h2>
+
+            <p
+              data-node-id="105:593"
+              style={{
+                margin: 0,
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '12px',
+                color: '#475569',
+              }}
+            >
+              Your photo stays yours. Choose how it may be used.
+            </p>
+
+            {/* Option 1: Safety Verification Only ($0) */}
+            <button
+              type="button"
+              data-node-id="105:594"
+              onClick={() => setLicenseTier('safety_only')}
+              style={{
+                textAlign: 'left',
+                background: licenseTier === 'safety_only' ? '#ecfdf5' : '#ffffff',
+                border:
+                  licenseTier === 'safety_only' ? '1px solid #059669' : '1px solid #cbd5e1',
+                borderRadius: '6px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                cursor: 'pointer',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontWeight: 500,
+                  fontSize: '15px',
+                  color: licenseTier === 'safety_only' ? '#047857' : '#0f172a',
+                }}
+              >
+                {licenseTier === 'safety_only' ? '◉' : '○'} Safety Verification Only (
+                <span style={{ fontFamily: 'var(--pz-font-mono)', fontSize: '12px' }}>$0</span>)
+              </span>
+              <span style={{ fontSize: '12px', color: '#475569' }}>
+                Internal newsroom verification only; never published.
+              </span>
+            </button>
+
+            {/* Option 2: Public News with Attribution ($0) */}
+            <button
+              type="button"
+              data-node-id="105:597"
+              onClick={() => setLicenseTier('free_attribution')}
+              style={{
+                textAlign: 'left',
+                background: licenseTier === 'free_attribution' ? '#ecfdf5' : '#ffffff',
+                border:
+                  licenseTier === 'free_attribution' ? '1px solid #059669' : '1px solid #cbd5e1',
+                borderRadius: '6px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                cursor: 'pointer',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontWeight: 500,
+                  fontSize: '15px',
+                  color: licenseTier === 'free_attribution' ? '#047857' : '#0f172a',
+                }}
+              >
+                {licenseTier === 'free_attribution' ? '◉' : '○'} Public News with Attribution (
+                <span style={{ fontFamily: 'var(--pz-font-mono)', fontSize: '12px' }}>$0</span>)
+              </span>
+              <span style={{ fontSize: '12px', color: '#475569' }}>
+                Free for newsrooms to publish with your credit.
+              </span>
+            </button>
+
+            {/* Option 3: Pre-Authorized Commercial Pool ($3.50 – $10.50 Payout) */}
+            <button
+              type="button"
+              data-node-id="105:600"
+              onClick={() => setLicenseTier('commercial_pool')}
+              style={{
+                textAlign: 'left',
+                background: licenseTier === 'commercial_pool' ? '#ecfdf5' : '#ffffff',
+                border:
+                  licenseTier === 'commercial_pool' ? '1px solid #059669' : '1px solid #cbd5e1',
+                borderRadius: '6px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                cursor: 'pointer',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--pz-font-sans)',
+                  fontWeight: 500,
+                  fontSize: '15px',
+                  color: licenseTier === 'commercial_pool' ? '#047857' : '#0f172a',
+                }}
+              >
+                {licenseTier === 'commercial_pool' ? '◉' : '○'} Pre-Authorized Commercial Pool (
+                <span style={{ fontFamily: 'var(--pz-font-mono)', fontSize: '12px' }}>$3.50</span>
+                {' – '}
+                <span style={{ fontFamily: 'var(--pz-font-mono)', fontSize: '12px' }}>$10.50</span>
+                {' Payout)'}
+              </span>
+              <span style={{ fontSize: '12px', color: '#475569' }}>
+                Instant flat-fee licensing:{' '}
+                <span style={{ fontFamily: 'var(--pz-font-mono)' }}>$3.50</span> per standard
+                newsroom use, <span style={{ fontFamily: 'var(--pz-font-mono)' }}>$10.50</span> for
+                a 24h exclusive. You earn 70%.
+              </span>
+            </button>
+
+            {/* AI Disqualification Notice (108:539) */}
+            <div
+              data-node-id="108:539"
+              style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '5px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}
+            >
+              <span style={{ fontSize: '13px', color: '#991b1b' }}>
+                AI-generated or internet-scraped images are automatically detected and disqualified.
+              </span>
+              <span style={{ fontSize: '11px', color: '#7f1d1d' }}>
+                Detection is imperfect. Mandatory human review protects contributors and newsrooms.
+              </span>
+            </div>
+
+            {/* Attribution Preference (105:603 & 105:604) */}
+            <span
+              data-node-id="105:603"
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '12px',
+                color: '#334155',
+              }}
+            >
+              Attribution preference
+            </span>
+
+            <div
+              data-node-id="105:604"
+              style={{
+                background: '#e2e8f0',
+                padding: '3px',
+                borderRadius: '6px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              }}
+            >
+              {(
+                [
+                  { key: 'full_name', label: 'Credit My Name' },
+                  { key: 'handle', label: 'Use Handle' },
+                  { key: 'anonymous', label: 'Stay Anonymous' },
+                ] as const
+              ).map((item) => {
+                const active = attributionMode === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setAttributionMode(item.key)}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: active ? '#ffffff' : 'transparent',
+                      color: active ? '#0f172a' : '#475569',
+                      fontFamily: 'var(--pz-font-sans)',
+                      fontWeight: active ? 500 : 400,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <span
+              data-node-id="105:611"
+              style={{
+                fontFamily: 'var(--pz-font-sans)',
+                fontSize: '11px',
+                color: '#64748b',
+              }}
+            >
+              Preferences apply if you add media. No login needed to report.
+            </span>
+          </div>
+
+          {renderLowBandwidthSwitch()}
+
+          {/* Report Review Summary (83:418) */}
+          <div
+            data-node-id="83:418"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              fontSize: '14px',
+            }}
+          >
+            <span style={{ fontWeight: 500, color: '#202a24' }}>
+              Review: {activeCat.label} · {roadOrArea}
+            </span>
+            <span style={{ color: '#5d6b63' }}>
+              Approximate location · {includePhoto ? 'Photo evidence attached' : 'Text only · No evidence added'}
+            </span>
+          </div>
+
+          {/* Consent Checkbox (83:421) */}
+          <label
+            data-node-id="83:421"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: '#202a24',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={consentChecked}
+              onChange={(e) => setConsentChecked(e.target.checked)}
+              style={{
+                width: '20px',
+                height: '20px',
+                accentColor: '#176b45',
+                marginTop: '2px',
+                flexShrink: 0,
+              }}
+            />
+            <span>
+              I agree this report can be reviewed by the editorial team before any public
+              publication.
+            </span>
+          </label>
+
+          <p
+            data-node-id="83:426"
+            style={{
+              margin: 0,
+              fontFamily: 'var(--pz-font-sans)',
+              fontSize: '14px',
+              color: '#5d6b63',
+            }}
+          >
+            Submitting does not publish an alert. The team may ask for more information.
+          </p>
+
+          {/* Form Actions (83:427) */}
+          <div
+            data-node-id="83:427"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: '8px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#176b45',
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '16px',
+                height: '48px',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              ← Back
+            </button>
+
+            <button
+              type="submit"
+              disabled={!consentChecked}
+              style={{
+                background: consentChecked ? '#176b45' : '#94a3b8',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                height: '48px',
+                padding: '0 22px',
+                fontFamily: 'var(--pz-font-sans)',
+                fontWeight: 500,
+                fontSize: '16px',
+                cursor: consentChecked ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Submit report
+            </button>
+          </div>
         </form>
-
-        {/* =================================================================
-            RIGHT COLUMN: REPORTING GUIDANCE PANEL
-            ================================================================= */}
-        <aside style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="pz-card-panel">
-            <h2 className="pz-card-title">Your report starts a review</h2>
-            <p style={{ fontSize: '13.5px', color: 'var(--pz-muted)' }}>
-              Submissions go straight into the Panzira AI Signal Monitor and Journalist Inbox.
-              Automated structuring helps translate Shona/Ndebele reports and group nearby corridor
-              mentions, while human editors make every verification decision.
-            </p>
-          </div>
-
-          <div className="pz-cream-panel">
-            <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--pz-text)' }}>
-              Graphic-image & privacy safeguards
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--pz-muted)' }}>
-              • Crash scenes and distressing photographs are kept hidden on public forms, blurred in
-              the newsroom workspace, and never shown on the public map.
-              <br />• Contributor phone numbers and identities are withheld from public alerts.
-              <br />• Low-bandwidth text reports carry full weight when corroborated.
-            </p>
-          </div>
-
-          <div className="pz-missing-panel">
-            <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--pz-red)' }}>
-              Not an emergency dispatch service
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--pz-text)' }}>
-              Never stop in an active highway lane to photograph a hazard. Alert emergency
-              responders first if anyone is injured.
-            </p>
-          </div>
-        </aside>
-      </div>
+      )}
     </div>
   );
 };
+
+export default ReportHazardView;

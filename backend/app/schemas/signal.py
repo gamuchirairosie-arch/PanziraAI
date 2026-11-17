@@ -47,6 +47,8 @@ class CitizenReportCreate(BaseModel):
     containsGraphicContent: Optional[bool] = False
     reportedLat: Optional[float] = Field(default=None, ge=-90, le=90)
     reportedLng: Optional[float] = Field(default=None, ge=-180, le=180)
+    licenseTier: Optional[Literal['safety_only', 'free_attribution', 'commercial_pool']] = 'safety_only'
+    attributionMode: Optional[Literal['full_name', 'handle', 'anonymous']] = 'anonymous'
     # Integration provenance fields (when ingested via webhook or social collector)
     sourceChannelLabel: Optional[str] = "Citizen web"
     sourceChannelShort: Optional[str] = "Citizen web (opt-in)"
@@ -118,6 +120,22 @@ class SignalReportResponse(BaseModel):
     reportedLat: Optional[float] = None
     reportedLng: Optional[float] = None
     gpsReported: bool = False
+    claimPin: Optional[str] = None
+    claim_pin: Optional[str] = None
+    licenseTier: Optional[str] = "safety_only"
+    license_tier: Optional[str] = "safety_only"
+    attributionMode: Optional[str] = "anonymous"
+    attribution_mode: Optional[str] = "anonymous"
+    aiScanVerdict: Optional[str] = None
+    ai_scan_verdict: Optional[str] = None
+    aiScanSummary: Optional[str] = None
+    ai_scan_summary: Optional[str] = None
+    commercialEligible: Optional[bool] = True
+    commercial_eligible: Optional[bool] = True
+    humanVisualAiCheck: Optional[bool] = False
+    human_visual_ai_check: Optional[bool] = False
+    translationReviewed: Optional[bool] = False
+    translation_reviewed: Optional[bool] = False
 
     class Config:
         from_attributes = True

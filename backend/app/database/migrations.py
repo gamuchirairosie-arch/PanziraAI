@@ -18,7 +18,7 @@ def run_migrations(db_path: str = "panzira.db"):
 
     # Create timestamped safety backup before applying migrations
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = db_file.parent / f"{db_file.stem}_pre_migration_{ts}.db"
+    backup_file = db_file.parent / f"{db_file.stem}_pre_migration_{ts}.db.bak"
     shutil.copy2(db_file, backup_file)
     print(f"[*] Created pre-migration backup at: {backup_file.name}")
 
@@ -38,6 +38,13 @@ def run_migrations(db_path: str = "panzira.db"):
             ("active", "ALTER TABLE users ADD COLUMN active BOOLEAN DEFAULT 1"),
             ("failed_logins", "ALTER TABLE users ADD COLUMN failed_logins INTEGER DEFAULT 0"),
             ("locked_until", "ALTER TABLE users ADD COLUMN locked_until DATETIME"),
+            ("handle", "ALTER TABLE users ADD COLUMN handle VARCHAR(80)"),
+            ("phone", "ALTER TABLE users ADD COLUMN phone VARCHAR(40)"),
+            ("media_house", "ALTER TABLE users ADD COLUMN media_house VARCHAR(160)"),
+            ("zmc_number", "ALTER TABLE users ADD COLUMN zmc_number VARCHAR(80)"),
+            ("press_card_url", "ALTER TABLE users ADD COLUMN press_card_url VARCHAR(500)"),
+            ("verification_status", "ALTER TABLE users ADD COLUMN verification_status VARCHAR(30) DEFAULT 'verified'"),
+            ("royalty_balance_usd", "ALTER TABLE users ADD COLUMN royalty_balance_usd FLOAT DEFAULT 0.0"),
         ]
 
         for col, sql in user_migrations:
@@ -52,6 +59,33 @@ def run_migrations(db_path: str = "panzira.db"):
         cur.execute("UPDATE users SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL")
         cur.execute("UPDATE users SET active = is_active WHERE active IS NULL AND is_active IS NOT NULL")
         cur.execute("UPDATE users SET is_active = active WHERE is_active IS NULL AND active IS NOT NULL")
+        cur.execute("UPDATE users SET verification_status = 'verified' WHERE verification_status IS NULL")
+        cur.execute("UPDATE users SET royalty_balance_usd = 0.0 WHERE royalty_balance_usd IS NULL")
+
+    # 2. Inspect and migrate 'reports' table (/api/v1 canonical schema)
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reports'")
+    if cur.fetchone():
+        v1_report_cols = {r[1] for r in cur.execute("PRAGMA table_info(reports)").fetchall()}
+        v1_report_migrations = [
+            ("contributor_id", "ALTER TABLE reports ADD COLUMN contributor_id INTEGER"),
+            ("claim_pin", "ALTER TABLE reports ADD COLUMN claim_pin VARCHAR(10)"),
+            ("license_tier", "ALTER TABLE reports ADD COLUMN license_tier VARCHAR(30) DEFAULT 'safety_only'"),
+            ("attribution_mode", "ALTER TABLE reports ADD COLUMN attribution_mode VARCHAR(30) DEFAULT 'anonymous'"),
+            ("exclusive_license_holder", "ALTER TABLE reports ADD COLUMN exclusive_license_holder VARCHAR(160)"),
+            ("exclusive_until", "ALTER TABLE reports ADD COLUMN exclusive_until DATETIME"),
+            ("claimed_by_id", "ALTER TABLE reports ADD COLUMN claimed_by_id INTEGER"),
+            ("claimed_by_name", "ALTER TABLE reports ADD COLUMN claimed_by_name VARCHAR(120)"),
+            ("claimed_by_media_house", "ALTER TABLE reports ADD COLUMN claimed_by_media_house VARCHAR(160)"),
+            ("claim_locked_until", "ALTER TABLE reports ADD COLUMN claim_locked_until DATETIME"),
+            ("ai_scan_verdict", "ALTER TABLE reports ADD COLUMN ai_scan_verdict VARCHAR(40)"),
+            ("ai_scan_summary", "ALTER TABLE reports ADD COLUMN ai_scan_summary TEXT"),
+            ("ai_forensics", "ALTER TABLE reports ADD COLUMN ai_forensics JSON"),
+            ("commercial_eligible", "ALTER TABLE reports ADD COLUMN commercial_eligible BOOLEAN DEFAULT 1"),
+            ("human_visual_ai_check", "ALTER TABLE reports ADD COLUMN human_visual_ai_check BOOLEAN DEFAULT 0"),
+        ]
+        for col, sql in v1_report_migrations:
+            if col not in v1_report_cols:
+                cur.execute(sql)
 
     # Reporter-supplied browser coordinates are optional and separate from AI location guesses.
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='signal_reports'")

@@ -53,15 +53,24 @@ async def lifespan(app: FastAPI):
         if db_engine.dialect.name == "sqlite" and db_engine.url.database:
             inspector = inspect(legacy_engine)
             needs_user_upgrade = inspector.has_table("users") and not {
-                "password_hash", "name", "can_view_graphic", "active", "failed_logins", "locked_until"
+                "password_hash", "name", "can_view_graphic", "active", "failed_logins", "locked_until",
+                "handle", "phone", "media_house", "zmc_number", "press_card_url",
+                "verification_status", "royalty_balance_usd",
             }.issubset({c["name"] for c in inspector.get_columns("users")})
+            needs_v1_report_upgrade = inspector.has_table("reports") and not {
+                "contributor_id", "claim_pin", "license_tier", "attribution_mode",
+                "exclusive_license_holder", "exclusive_until", "claimed_by_id",
+                "claimed_by_name", "claimed_by_media_house", "claim_locked_until",
+                "ai_scan_verdict", "ai_scan_summary", "ai_forensics",
+                "commercial_eligible", "human_visual_ai_check",
+            }.issubset({c["name"] for c in inspector.get_columns("reports")})
             needs_location_upgrade = inspector.has_table("signal_reports") and not {
                 "reported_lat", "reported_lng", "gps_reported"
             }.issubset({c["name"] for c in inspector.get_columns("signal_reports")})
             needs_alert_location_upgrade = inspector.has_table("verified_public_alerts") and not {
                 "lat", "lng"
             }.issubset({c["name"] for c in inspector.get_columns("verified_public_alerts")})
-            if needs_user_upgrade or needs_location_upgrade or needs_alert_location_upgrade:
+            if needs_user_upgrade or needs_v1_report_upgrade or needs_location_upgrade or needs_alert_location_upgrade:
                 run_migrations(db_engine.url.database)
         LegacyBase.metadata.create_all(bind=legacy_engine)
     except Exception:

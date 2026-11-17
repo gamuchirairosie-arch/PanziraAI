@@ -15,26 +15,28 @@ from datetime import timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import audit
 from .config import get_settings
-from .models import PublicAlert, Report, Role, Status, TimelineEvent, utcnow
+from .models import Evidence, PublicAlert, Report, Role, Status, TimelineEvent, utcnow
 from .security import Actor
 
 CAT = ZoneInfo("Africa/Harare")
 
 TRANSITIONS: dict[str, dict[str, set[str]]] = {
     # from -> to -> roles allowed
-    Status.RECEIVED: {Status.AI_EXTRACTED: {Role.SYSTEM}, Status.REJECTED: {Role.EDITOR}},
-    Status.AI_EXTRACTED: {Status.CORROBORATION: {Role.JOURNALIST, Role.EDITOR},
-                          Status.REJECTED: {Role.EDITOR}},
-    Status.CORROBORATION: {Status.EDITOR_APPROVAL: {Role.JOURNALIST, Role.EDITOR},
-                           Status.REJECTED: {Role.EDITOR}},
-    Status.EDITOR_APPROVAL: {Status.PUBLISHED: {Role.EDITOR}, Status.CORROBORATION: {Role.JOURNALIST, Role.EDITOR},
-                             Status.REJECTED: {Role.EDITOR}},
+    Status.RECEIVED: {Status.AI_EXTRACTED: {Role.SYSTEM}, Status.REJECTED: {Role.EDITOR, Role.ADMIN}},
+    Status.AI_EXTRACTED: {Status.CORROBORATION: {Role.JOURNALIST, Role.EDITOR, Role.ADMIN},
+                          Status.REJECTED: {Role.EDITOR, Role.ADMIN}},
+    Status.CORROBORATION: {Status.EDITOR_APPROVAL: {Role.JOURNALIST, Role.EDITOR, Role.ADMIN},
+                           Status.REJECTED: {Role.EDITOR, Role.ADMIN}},
+    Status.EDITOR_APPROVAL: {Status.PUBLISHED: {Role.EDITOR, Role.ADMIN},
+                             Status.CORROBORATION: {Role.JOURNALIST, Role.EDITOR, Role.ADMIN},
+                             Status.REJECTED: {Role.EDITOR, Role.ADMIN}},
     Status.PUBLISHED: {},  # leaves via withdraw_alert()
-    Status.REJECTED: {Status.AI_EXTRACTED: {Role.EDITOR}},  # reopen
+    Status.REJECTED: {Status.AI_EXTRACTED: {Role.EDITOR, Role.ADMIN}},  # reopen
 }
 
 CHECKS = ("chk_location_time", "chk_media_date", "chk_independent", "chk_still_present")
@@ -66,13 +68,16 @@ def checklist_complete(r: Report) -> bool:
 
 
 def set_check(db: Session, report: Report, field: str, value: bool, actor: Actor) -> None:
-    if field not in CHECKS:
+    if field not in (*CHECKS, "human_visual_ai_check", "translation_reviewed"):
         raise HTTPException(422, "Unknown checklist item")
     if report.status in (Status.PUBLISHED, Status.REJECTED):
         raise HTTPException(409, "Report is closed; reopen it first")
     if report.status == Status.RECEIVED:
         raise HTTPException(409, "AI extraction has not finished yet")
     setattr(report, field, value)
+    if field == "translation_reviewed" and value:
+        report.translation_method = "human-reviewed"
+        report.translation_reviewed_by = actor.id
     audit.record(db, actor, "checklist_set", "report", report.id, {"item": field, "value": value})
     add_timeline(db, report, actor, f"{'Completed' if value else 'Unchecked'} verification check: {field.removeprefix('chk_').replace('_', ' ')}.")
 
@@ -97,8 +102,8 @@ def request_evidence(db: Session, report: Report, actor: Actor, note: str | None
 
 def publish(db: Session, report: Report, actor: Actor) -> PublicAlert:
     s = get_settings()
-    if actor.role != Role.EDITOR or actor.id is None:
-        raise HTTPException(403, "Only a human editor can publish a public alert")
+    if actor.role not in (Role.EDITOR, Role.ADMIN) or actor.id is None:
+        raise HTTPException(403, "Only a human editor or admin can publish a public alert")
     if report.status != Status.EDITOR_APPROVAL:
         raise HTTPException(409, "Report must be at the editor-approval stage")
     if not checklist_complete(report):
@@ -107,6 +112,14 @@ def publish(db: Session, report: Report, actor: Actor) -> PublicAlert:
         raise HTTPException(409, "A road or area name is required before publishing")
     if report.language != "en" and not report.translation_reviewed:
         raise HTTPException(409, "A fluent editor must review the English translation before publishing")
+    has_image = bool(report.evidence) or (
+        db.execute(select(Evidence.id).where(Evidence.report_id == report.id).limit(1)).scalar_one_or_none() is not None
+    )
+    if has_image and not report.human_visual_ai_check:
+        raise HTTPException(
+            409,
+            "I have visually inspected this image myself for AI artifacts: mandatory human_visual_ai_check must be True before publishing a report with an image",
+        )
     if s.require_four_eyes and report.checklist_completed_by == actor.id:
         raise HTTPException(409, "Four-eyes rule: a different editor must approve")
 
@@ -140,8 +153,8 @@ def reject(db: Session, report: Report, actor: Actor, reason: str | None) -> Non
 
 
 def withdraw_alert(db: Session, alert: PublicAlert, actor: Actor, reason: str) -> None:
-    if actor.role != Role.EDITOR:
-        raise HTTPException(403, "Only an editor can withdraw an alert")
+    if actor.role not in (Role.EDITOR, Role.ADMIN):
+        raise HTTPException(403, "Only an editor or admin can withdraw an alert")
     if alert.withdrawn_at:
         raise HTTPException(409, "Alert already withdrawn")
     alert.withdrawn_at, alert.withdrawn_by_id, alert.withdrawn_reason = utcnow(), actor.id, reason

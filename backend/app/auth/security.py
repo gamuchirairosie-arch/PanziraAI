@@ -4,6 +4,7 @@ Provides secure PBKDF2-HMAC-SHA256 password hashing and JWT token operations.
 Zero external native dependencies required.
 """
 
+import base64
 import os
 import hmac
 import hashlib
@@ -11,38 +12,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import jwt
 from app.config import settings
+from app.security import hash_password as _v1_hash_password, verify_password as _v1_verify_password
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using PBKDF2-HMAC-SHA256 with a unique random salt."""
-    salt = os.urandom(16)
-    key = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt,
-        iterations=100_000
-    )
-    # Store format: hex(salt)$hex(key)
-    return f"{salt.hex()}${key.hex()}"
+    """Hash a password using canonical PBKDF2-HMAC-SHA256."""
+    return _v1_hash_password(password)
 
 
 def verify_password(plain_password: str, stored_hash: str) -> bool:
-    """Verify a plain password against the stored PBKDF2 hash."""
-    try:
-        parts = stored_hash.split("$")
-        if len(parts) != 2:
-            return False
-        salt = bytes.fromhex(parts[0])
-        expected_key = bytes.fromhex(parts[1])
-        actual_key = hashlib.pbkdf2_hmac(
-            "sha256",
-            plain_password.encode("utf-8"),
-            salt,
-            iterations=100_000
-        )
-        return hmac.compare_digest(expected_key, actual_key)
-    except Exception:
-        return False
+    """Verify a plain password against either pbkdf2$... or legacy hex(salt)$hex(key) hash."""
+    return _v1_verify_password(plain_password, stored_hash)
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:

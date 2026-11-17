@@ -27,11 +27,13 @@ def aware(dt: datetime | None) -> datetime | None:
 
 
 class Role:
+    CITIZEN = "citizen"
     JOURNALIST = "journalist"
     EDITOR = "editor"
     ADMIN = "admin"
     SYSTEM = "system"  # the AI pipeline / ingestion workers; can never publish
-    ALL_HUMAN = (JOURNALIST, EDITOR, ADMIN)
+    ALL_HUMAN = (CITIZEN, JOURNALIST, EDITOR, ADMIN)
+    NEWSROOM = (JOURNALIST, EDITOR, ADMIN)
 
 
 class Status:
@@ -50,6 +52,13 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(120))
     full_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     role: Mapped[str] = mapped_column(String(20))
+    handle: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    media_house: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    zmc_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    press_card_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    verification_status: Mapped[str] = mapped_column(String(30), default="verified")
+    royalty_balance_usd: Mapped[float] = mapped_column(Float, default=0.0)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     can_view_graphic: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -75,6 +84,12 @@ class Report(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     observed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     contributor_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True)
+    contributor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    claim_pin: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    license_tier: Mapped[str] = mapped_column(String(30), default="safety_only")
+    attribution_mode: Mapped[str] = mapped_column(String(30), default="anonymous")
+    exclusive_license_holder: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    exclusive_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     contact_enc: Mapped[Optional[str]] = mapped_column(Text)  # encrypted, only with follow-up consent
     tracking_token_hash: Mapped[Optional[str]] = mapped_column(String(64))
 
@@ -106,12 +121,17 @@ class Report(Base):
     # AI output (suggestions only)
     ai: Mapped[Optional[dict]] = mapped_column(JSON)
     ai_status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|done|failed
+    ai_scan_verdict: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    ai_scan_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_forensics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    commercial_eligible: Mapped[bool] = mapped_column(Boolean, default=True)
+    human_visual_ai_check: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # graphic-safety
     is_graphic: Mapped[bool] = mapped_column(Boolean, default=False)
     graphic_reason: Mapped[Optional[str]] = mapped_column(Text)
 
-    # verification
+    # verification & anti-collision locking
     chk_location_time: Mapped[bool] = mapped_column(Boolean, default=False)
     chk_media_date: Mapped[bool] = mapped_column(Boolean, default=False)
     chk_independent: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -119,6 +139,10 @@ class Report(Base):
     checklist_completed_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     editorial_notes: Mapped[str] = mapped_column(Text, default="")
     duplicate_cluster_id: Mapped[Optional[str]] = mapped_column(String(40), index=True)
+    claimed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    claimed_by_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    claimed_by_media_house: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    claim_locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -345,3 +369,21 @@ class CollectionRun(Base):
     skipped_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="running")
     error: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class MediaLicenseTransaction(Base):
+    """Flat-fee agency media licensing settlement record ($5 standard / $15 24h exclusive)."""
+    __tablename__ = "media_license_transactions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_ref: Mapped[str] = mapped_column(String(40), index=True)
+    contributor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    journalist_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    media_house: Mapped[str] = mapped_column(String(160))
+    license_type: Mapped[str] = mapped_column(String(30))  # standard_5 | exclusive_15
+    gross_amount_usd: Mapped[float] = mapped_column(Float)
+    contributor_share_usd: Mapped[float] = mapped_column(Float)
+    platform_fee_usd: Mapped[float] = mapped_column(Float)
+    settlement_status: Mapped[str] = mapped_column(String(30), default="settled")
+    settlement_ref: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+

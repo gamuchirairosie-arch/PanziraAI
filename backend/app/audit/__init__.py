@@ -59,8 +59,8 @@ def verify_chain(db: Session) -> dict:
         content = _row_content(row.ts, Actor(row.actor_id, row.actor_label, row.actor_role),
                                row.action, row.entity_type, row.entity_id, row.detail, row.ip)
         if row.prev_hash != prev or row.hash != _digest(prev, content):
-            return {"ok": False, "broken_at": row.id, "checked": count}
+            return {"ok": False, "verified": False, "broken_at": row.id, "checked": count}
         prev = row.hash
         count += 1
-    return {"ok": True, "checked": count}
+    return {"ok": True, "verified": True, "checked": count}
 

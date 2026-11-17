@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "demo": "start_demo.bat"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

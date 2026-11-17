@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .corridors import BY_ID, CORRIDORS
-from .models import Brief, DuplicateLink, Evidence, PublicAlert, Report, Status, utcnow
+from .models import Brief, DuplicateLink, Evidence, PublicAlert, Report, Status, aware, utcnow
 from .security import Actor, media_token
 from .workflow import fmt
 
@@ -124,7 +124,9 @@ def to_signal(db: Session, r: Report, actor: Actor) -> dict:
         "categoryKey": r.category_key, "categoryLabel": r.category_label, "severityLabel": r.severity_label,
         "isCritical": r.is_critical, "originalLanguage": LANG_NAME[r.language], "originalQuote": quote,
         "draftEnglishTranslation": (f"{r.text_english}" if r.language != "en" and r.text_english else None),
-        "translationReviewed": r.translation_reviewed, "translationMethod": r.translation_method,
+        "translationReviewed": bool(r.translation_reviewed), "translation_reviewed": bool(r.translation_reviewed),
+        "translationVerified": bool(r.translation_reviewed), "translation_verified": bool(r.translation_reviewed),
+        "translationMethod": r.translation_method,
         "sourceProvenanceNote": (
             f"{CHANNEL_SHORT[r.channel]} • Observed {fmt(r.observed_at or r.source_posted_at or r.created_at)} • "
             f"Received {fmt(r.created_at)}" + (f" • {r.source_account}" if r.source_account else "")
@@ -154,6 +156,36 @@ def to_signal(db: Session, r: Report, actor: Actor) -> dict:
         "timeline": [{"time": fmt(t.ts), "description": t.description} for t in r.timeline],
         "isUserSubmitted": r.visibility == "opt-in", "mapCoords": map_pct(r.lat, r.lng),
         "lat": r.lat, "lng": r.lng, "status": r.status,
+        "contributorId": r.contributor_id,
+        "contributor_id": r.contributor_id,
+        "claimPin": r.claim_pin,
+        "claim_pin": r.claim_pin,
+        "licenseTier": r.license_tier,
+        "license_tier": r.license_tier,
+        "attributionMode": r.attribution_mode,
+        "attribution_mode": r.attribution_mode,
+        "exclusiveLicenseHolder": r.exclusive_license_holder,
+        "exclusive_license_holder": r.exclusive_license_holder,
+        "exclusiveUntil": aware(r.exclusive_until).isoformat() if r.exclusive_until else None,
+        "exclusive_until": aware(r.exclusive_until).isoformat() if r.exclusive_until else None,
+        "claimedById": r.claimed_by_id,
+        "claimed_by_id": r.claimed_by_id,
+        "claimedByName": r.claimed_by_name,
+        "claimed_by_name": r.claimed_by_name,
+        "claimedByMediaHouse": r.claimed_by_media_house,
+        "claimed_by_media_house": r.claimed_by_media_house,
+        "claimLockedUntil": aware(r.claim_locked_until).isoformat() if r.claim_locked_until else None,
+        "claim_locked_until": aware(r.claim_locked_until).isoformat() if r.claim_locked_until else None,
+        "aiScanVerdict": r.ai_scan_verdict,
+        "ai_scan_verdict": r.ai_scan_verdict,
+        "aiScanSummary": r.ai_scan_summary,
+        "ai_scan_summary": r.ai_scan_summary,
+        "aiForensics": r.ai_forensics,
+        "ai_forensics": r.ai_forensics,
+        "commercialEligible": bool(r.commercial_eligible),
+        "commercial_eligible": bool(r.commercial_eligible),
+        "humanVisualAiCheck": bool(r.human_visual_ai_check),
+        "human_visual_ai_check": bool(r.human_visual_ai_check),
     }
     out.update(media_links(db, r, actor))
     return out

@@ -17,15 +17,40 @@ import {
 } from './views/SignalInboxAndVerifyView';
 import { SignalMonitorView } from './views/SignalMonitorView';
 import { NewsSourceMonitorView } from './views/NewsSourceMonitorView';
+import { AuthView } from './views/AuthView';
+import { CitizenDashboardView } from './views/CitizenDashboardView';
+import { AdminDashboardView } from './views/AdminDashboardView';
 
 const ActiveRouteRenderer: React.FC = () => {
-  const { portal, newsroomView, publicView } = usePanzira();
+  const { portal, newsroomView, publicView, currentUser } = usePanzira();
+
+  if (portal === 'auth') {
+    return <AuthView />;
+  }
+
+  if (portal === 'citizen') {
+    if (!currentUser) {
+      return <AuthView />;
+    }
+    return <CitizenDashboardView />;
+  }
+
+  if (portal === 'admin') {
+    if (!currentUser || currentUser.role !== 'admin') {
+      return <AuthView />;
+    }
+    return <AdminDashboardView />;
+  }
 
   if (portal === 'public') {
     if (publicView === 'report') {
       return <ReportHazardView />;
     }
     return <PublicDashboardView />;
+  }
+
+  if (!currentUser || currentUser.role === 'citizen') {
+    return <AuthView />;
   }
 
   switch (newsroomView) {
@@ -44,7 +69,7 @@ const ActiveRouteRenderer: React.FC = () => {
     case 'sources':
       return <NewsSourceMonitorView />;
     default:
-      return <SignalMonitorView />;
+      return <SignalInboxView />;
   }
 };
 

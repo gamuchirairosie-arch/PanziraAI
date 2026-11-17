@@ -8,7 +8,7 @@ matching the Panzira AI reference dataset.
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database.models import User, SignalReport, VerifiedPublicAlert, CorridorWatch, WorkingBrief
-from app.auth.security import hash_password
+from app.security import hash_password
 
 
 def seed_database(db: Session):
@@ -51,6 +51,75 @@ def seed_database(db: Session):
             )
         ]
         db.add_all(users)
+        db.commit()
+
+    # Ensure 1-Click Live Demo Personas exist in the database
+    demo_personas = [
+        {
+            "email": "tariro@citizen.co.zw",
+            "password": "panzira2026",
+            "full_name": "Tariro Moyo",
+            "role": "citizen",
+            "handle": "@TariroOnTheRoad",
+            "phone": "+263 77 412 8901",
+            "media_house": None,
+            "zmc_number": None,
+            "verification_status": "verified",
+            "royalty_balance_usd": 16.0,
+            "can_view_graphic": False,
+        },
+        {
+            "email": "nqobile@chronicle.co.zw",
+            "password": "panzira2026",
+            "full_name": "Nqobile Dube",
+            "role": "journalist",
+            "handle": None,
+            "phone": "+263 77 801 4412",
+            "media_house": "The Chronicle",
+            "zmc_number": "ZMC-2026-0418",
+            "verification_status": "verified",
+            "royalty_balance_usd": 0.0,
+            "can_view_graphic": True,
+        },
+        {
+            "email": "rudo@panzira.zw",
+            "password": "panzira2026",
+            "full_name": "Rudo Moyo",
+            "role": "admin",
+            "handle": None,
+            "phone": "+263 77 200 1001",
+            "media_house": "Panzira Control Desk",
+            "zmc_number": None,
+            "verification_status": "verified",
+            "royalty_balance_usd": 0.0,
+            "can_view_graphic": True,
+        },
+    ]
+    added_demo_persona = False
+    for persona in demo_personas:
+        if not db.query(User).filter(User.email == persona["email"]).first():
+            pw_hash = hash_password(persona["password"])
+            db.add(
+                User(
+                    email=persona["email"],
+                    hashed_password=pw_hash,
+                    password_hash=pw_hash,
+                    full_name=persona["full_name"],
+                    name=persona["full_name"],
+                    role=persona["role"],
+                    handle=persona["handle"],
+                    phone=persona["phone"],
+                    media_house=persona["media_house"],
+                    zmc_number=persona["zmc_number"],
+                    verification_status=persona["verification_status"],
+                    royalty_balance_usd=persona["royalty_balance_usd"],
+                    can_view_graphic=persona["can_view_graphic"],
+                    is_active=True,
+                    active=True,
+                )
+            )
+            added_demo_persona = True
+    if added_demo_persona:
         db.commit()
 
     # 2. Seed Signals

@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     translation_provider: str = "glossary"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+    sightengine_api_user: str = ""
+    sightengine_api_secret: str = ""
     graphic_threshold: float = 0.55
     map_bbox: Tuple[float, float, float, float] = (-20.25, 28.45, -20.05, 28.72)  # s, w, n, e
 

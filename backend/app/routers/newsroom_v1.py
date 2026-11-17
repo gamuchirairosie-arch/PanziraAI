@@ -259,7 +259,7 @@ class SourceIn(BaseModel):
 
 
 @router.post("/sources", status_code=201)
-def register_source(body: SourceIn, request: Request, actor: Actor = Depends(admin_only), db: Session = Depends(get_db)):
+def register_source(body: SourceIn, request: Request, actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
     s = SourceRegistration(platform=body.platform, account_id=body.account_id, display_name=body.display_name,
                            basis=body.basis, registered_by_id=actor.id)
     db.add(s)
@@ -278,7 +278,7 @@ def list_sources(actor: Actor = Depends(newsroom), db: Session = Depends(get_db)
 
 
 @router.post("/sources/poll")
-def poll(background: BackgroundTasks, actor: Actor = Depends(admin_only), db: Session = Depends(get_db)):
+def poll(background: BackgroundTasks, actor: Actor = Depends(editor_only), db: Session = Depends(get_db)):
     res = meta.poll_registered_sources(db, Actor.system("system:social-ingest"))
     audit.record(db, actor, "social_poll", "source", "all", {k: v for k, v in res.items() if k != "report_ids"})
     db.commit()

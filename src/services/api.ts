@@ -4,7 +4,9 @@
  */
 
 import {
+  AuthUser,
   CorridorWatchItem,
+  JournalistApplicationRecord,
   SignalReport,
   VerificationChecklist,
   VerifiedPublicAlert,
@@ -97,17 +99,285 @@ class ApiService {
     }
   }
 
-  // --- Authentication ---
+  // --- Authentication & Registration (Sprint 1 /api/v1) ---
   async login(email = 'rudo.moyo@panzira.org', password = 'panzira_editor_2025') {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await fetch(`${V1_API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    if (!res.ok) throw new Error('Authentication failed');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Authentication failed');
+    }
     const data = await res.json();
     this.setToken(data.access_token);
+    return data as { access_token: string; token_type: string; user: AuthUser };
+  }
+
+  async fetchCurrentUser(): Promise<AuthUser> {
+    const res = await fetch(`${V1_API_BASE}/auth/me`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Not authenticated');
+    return res.json();
+  }
+
+  async registerCitizen(input: {
+    full_name: string;
+    handle?: string;
+    phone?: string;
+    email?: string;
+    password: string;
+    claim_reference?: string;
+    claim_pin?: string;
+  }): Promise<{
+    access_token: string;
+    token_type: string;
+    user: AuthUser;
+    claimedReport?: string | null;
+    claimed_report?: string | null;
+    claimed_report_reference?: string | null;
+  }> {
+    const res = await fetch(`${V1_API_BASE}/auth/register/citizen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Citizen registration failed');
+    }
+    const data = await res.json();
+    if (data.access_token) {
+      this.setToken(data.access_token);
+    }
     return data;
+  }
+
+  async registerJournalist(input: {
+    full_name: string;
+    email: string;
+    password?: string;
+    media_house: string;
+    zmc_number: string;
+    press_card_url?: string;
+  }): Promise<{
+    status: string;
+    message: string;
+    user: AuthUser;
+  }> {
+    const res = await fetch(`${V1_API_BASE}/auth/register/journalist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...input,
+        password: input.password || 'panzira_press_2026',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Journalist application failed');
+    }
+    return res.json();
+  }
+
+  async fetchJournalistApplications(statusFilter?: string): Promise<JournalistApplicationRecord[]> {
+    const q = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
+    const res = await fetch(`${V1_API_BASE}/admin/journalist-applications${q}`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Failed to load journalist applications');
+    return res.json();
+  }
+
+  async decideJournalistApplication(
+    userId: number,
+    decision: 'approve' | 'reject',
+    note?: string
+  ): Promise<{ status: string; decision: string; user: AuthUser }> {
+    const res = await fetch(`${V1_API_BASE}/admin/journalist-applications/${userId}/decide`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ decision, note: note || null }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update journalist application');
+    }
+    return res.json();
+  }
+
+  // --- Guest Report Claim & Contributor Rights ---
+  async claimGuestReport(input: {
+    reference: string;
+    claim_pin: string;
+    license_tier?: 'safety_only' | 'free_attribution' | 'commercial_pool';
+    attribution_mode?: 'full_name' | 'handle' | 'anonymous';
+  }): Promise<{
+    status: string;
+    reference: string;
+    contributor_id: number;
+    license_tier: string;
+    attribution_mode: string;
+    signal?: SignalReport;
+  }> {
+    const res = await fetch(`${V1_API_BASE}/reports/claim`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Invalid report reference or Claim PIN');
+    }
+    return res.json();
+  }
+
+  // --- Anti-Collision Lock, AI Visual Inspection & Licensing ---
+  async claimSignalLock(signalRef: string): Promise<SignalReport> {
+    const res = await fetch(`${V1_API_BASE}/signals/${encodeURIComponent(signalRef)}/claim`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to claim report lock');
+    }
+    return res.json();
+  }
+
+  async releaseSignalLock(signalRef: string): Promise<SignalReport> {
+    const res = await fetch(`${V1_API_BASE}/signals/${encodeURIComponent(signalRef)}/release`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to release report lock');
+    }
+    return res.json();
+  }
+
+  async setVisualAiCheck(signalRef: string, passed: boolean): Promise<SignalReport> {
+    const res = await fetch(`${V1_API_BASE}/signals/${encodeURIComponent(signalRef)}/visual-ai-check`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        passed,
+        checked: passed,
+        human_visual_ai_check: passed,
+        humanVisualAiCheck: passed,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to record human visual AI inspection');
+    }
+    return res.json();
+  }
+
+  async reviewSignalTranslation(signalRef: string, englishText: string): Promise<SignalReport> {
+    const res = await fetch(`${V1_API_BASE}/signals/${encodeURIComponent(signalRef)}/translation/review`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ english: englishText }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to review translation');
+    }
+    return res.json();
+  }
+
+  async licenseSignalMedia(
+    signalRef: string,
+    licenseType: 'standard' | 'exclusive' | 'standard_5' | 'exclusive_15',
+    mediaHouse?: string
+  ): Promise<{
+    transactionId?: number;
+    settlementRef?: string;
+    reportRef?: string;
+    licenseType?: string;
+    mediaHouse?: string;
+    grossAmountUsd?: number;
+    contributorShareUsd?: number;
+    platformFeeUsd?: number;
+    settlementStatus?: string;
+    contributorBalanceUsd?: number | null;
+    contributor_balance_usd?: number | null;
+    exclusiveLicenseHolder?: string | null;
+    exclusiveUntil?: string | null;
+    mediaAccessToken?: string | null;
+    downloadUrl?: string | null;
+  }> {
+    const normalizedTier =
+      licenseType === 'exclusive' || licenseType === 'exclusive_15' ? 'exclusive_15' : 'standard_5';
+    const res = await fetch(`${V1_API_BASE}/signals/${encodeURIComponent(signalRef)}/license-media`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        license_type: normalizedTier,
+        licenseType: normalizedTier,
+        media_house: mediaHouse || null,
+        mediaHouse: mediaHouse || null,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to license media');
+    }
+    return res.json();
+  }
+
+  async simulateUssdCallback(payload: {
+    session_id: string;
+    phone_number: string;
+    selected_corridor: string;
+    selected_hazard_type: string;
+    landmark_text: string;
+    severity_level?: string;
+  }): Promise<SignalReport> {
+    const res = await fetch(`${API_BASE}/integrations/ussd/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('USSD simulation failed');
+    return res.json();
+  }
+
+  async simulateWhatsAppWebhook(payload: {
+    from_number: string;
+    message_body: string;
+    user_consented_opt_in?: boolean;
+  }): Promise<SignalReport> {
+    const res = await fetch(`${API_BASE}/integrations/whatsapp/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        user_consented_opt_in: payload.user_consented_opt_in ?? true,
+      }),
+    });
+    if (!res.ok) throw new Error('WhatsApp webhook simulation failed');
+    return res.json();
+  }
+
+  async verifyAuditChain(): Promise<{ ok: boolean; verified?: boolean; checked: number }> {
+    const res = await fetch(`${V1_API_BASE}/audit/verify`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Failed to verify audit chain');
+    return res.json();
+  }
+
+  async fetchV1AuditEntries(limit = 20): Promise<any[]> {
+    const res = await fetch(`${V1_API_BASE}/audit?limit=${limit}`, {
+      headers: this.getHeaders(false),
+    });
+    if (!res.ok) throw new Error('Failed to load audit entries');
+    return res.json();
   }
 
   // --- Public APIs ---
@@ -140,6 +410,8 @@ class ApiService {
       containsGraphicContent: input.containsGraphicContent,
       reportedLat: input.reportedLat,
       reportedLng: input.reportedLng,
+      licenseTier: input.licenseTier || 'safety_only',
+      attributionMode: input.attributionMode || 'anonymous',
     };
 
     const res = await fetch(`${API_BASE}/public/submit`, {

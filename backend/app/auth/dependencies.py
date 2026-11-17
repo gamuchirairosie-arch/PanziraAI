@@ -67,6 +67,11 @@ def get_current_user(
 def require_role(allowed_roles: List[str]):
     """Factory dependency to enforce specific role permissions (e.g. editor, journalist)."""
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        if (getattr(current_user, "verification_status", None) or "verified") != "verified":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is pending admin verification",
+            )
         if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

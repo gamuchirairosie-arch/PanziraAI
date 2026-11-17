@@ -30,6 +30,7 @@ backend/.env.*
 
 # Databases & local data
 *.db
+*.db.bak
 *.sqlite
 *.sqlite3
 data/evidence/

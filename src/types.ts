@@ -1,4 +1,54 @@
-export type PortalMode = 'newsroom' | 'public';
+export type PortalMode = 'newsroom' | 'public' | 'auth' | 'citizen' | 'admin';
+
+export type AuthTab = 'signin' | 'citizen-signup' | 'journalist-apply';
+
+export type UserRole = 'citizen' | 'journalist' | 'editor' | 'admin';
+
+export type LicenseTier = 'safety_only' | 'free_attribution' | 'commercial_pool';
+
+export type AttributionMode = 'full_name' | 'handle' | 'anonymous';
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  handle?: string | null;
+  phone?: string | null;
+  media_house?: string | null;
+  zmc_number?: string | null;
+  press_card_url?: string | null;
+  verification_status?: 'verified' | 'pending_verification' | 'rejected' | string;
+  royalty_balance_usd?: number;
+}
+
+export interface JournalistApplicationRecord {
+  id: number;
+  full_name: string;
+  email: string;
+  role: string;
+  media_house: string | null;
+  zmc_number: string | null;
+  press_card_url: string | null;
+  verification_status: string;
+  created_at?: string | null;
+}
+
+export interface MediaLicenseSettlementRecord {
+  id: string;
+  reportRef: string;
+  incidentTitle: string;
+  newsroom: string;
+  licenseTier: 'standard' | 'exclusive' | 'flagged';
+  licenseTierLabel: string;
+  flatFeeUsd: number;
+  contributorShareUsd: number;
+  platformShareUsd: number;
+  contributorHandle: string;
+  paymentStatusLabel: string;
+  settlementRef: string;
+  createdAt: string;
+}
 
 export type NewsroomView =
   | 'monitor'
@@ -116,6 +166,34 @@ export interface SignalReport {
   reportedLat?: number;
   reportedLng?: number;
   gpsReported?: boolean;
+  // Sprint 1-3 Rights, Locking & AI Forensics fields
+  claimPin?: string | null;
+  contributorId?: number | null;
+  contributorCredit?: string | null;
+  royaltyEarnedUsd?: number;
+  licenseTier?: 'safety_only' | 'free_attribution' | 'commercial_pool';
+  attributionMode?: 'full_name' | 'handle' | 'anonymous';
+  exclusiveLicenseHolder?: string | null;
+  exclusiveUntil?: string | null;
+  claimedById?: number | null;
+  claimedByName?: string | null;
+  claimedByMediaHouse?: string | null;
+  claimLockedUntil?: string | null;
+  aiScanVerdict?: 'pass' | 'flagged_ai_or_screen' | string | null;
+  aiScanSummary?: string | null;
+  commercialEligible?: boolean;
+  humanVisualAiCheck?: boolean;
+  aiGeneratedProb?: number | null;
+  aiDetectionSource?: string | null;
+  screenRecaptureFlag?: boolean;
+  exifSummary?: string | null;
+  humanVisualAiCheckPassed?: boolean;
+  humanVisualCheckedBy?: string | null;
+  translationVerified?: boolean;
+  translationReviewed?: boolean;
+  mediaAccessToken?: string | null;
+  downloadUrl?: string | null;
+  piiRedacted?: boolean;
 }
 
 export interface VerifiedPublicAlert {

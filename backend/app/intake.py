@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import re
+import secrets
 import uuid
 from datetime import datetime
 
@@ -20,6 +21,8 @@ from .storage import save_bytes
 from .workflow import add_timeline, fmt
 
 OPT_IN_CHANNELS = {"web", "whatsapp", "telegram", "sms", "ussd"}
+VALID_LICENSE_TIERS = {"safety_only", "free_attribution", "commercial_pool"}
+VALID_ATTRIBUTION_MODES = {"full_name", "handle", "anonymous"}
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -59,6 +62,9 @@ def create_report(
     allow_followup: bool = False,
     reporter_flagged_graphic: bool = False,
     want_tracking_token: bool = False,
+    contributor_id: int | None = None,
+    license_tier: str = "safety_only",
+    attribution_mode: str = "anonymous",
 ) -> tuple[Report, str | None, bool]:
     """Returns (report, tracking_token_or_None, created). Idempotent on (channel, source_ref)."""
     if source_ref:
@@ -69,6 +75,9 @@ def create_report(
 
     code, src = lang_code(language)
     token_raw, token_hash = (new_tracking_token() if want_tracking_token else (None, None))
+    pin = f"{secrets.randbelow(10000):04d}"
+    tier = license_tier if license_tier in VALID_LICENSE_TIERS else "safety_only"
+    attr = attribution_mode if attribution_mode in VALID_ATTRIBUTION_MODES else "anonymous"
     r = Report(
         channel=channel,
         visibility="opt-in" if channel in OPT_IN_CHANNELS else "public",
@@ -77,6 +86,10 @@ def create_report(
         source_account=source_account,
         source_posted_at=source_posted_at,
         observed_at=observed_at,
+        contributor_id=contributor_id,
+        claim_pin=pin,
+        license_tier=tier,
+        attribution_mode=attr,
         text_original=clean_text(text),
         language=code, language_source=src,
         road_area=clean_text(road_area, 200), landmark=clean_text(landmark, 200),
@@ -97,7 +110,7 @@ def create_report(
     add_timeline(db, r, "system", f"Report received via {channel.replace('_', ' ')} at {fmt(utcnow())}. "
                                "Held off the public map pending human verification.")
     audit.record(db, actor, "report_received", "report", r.id,
-                 {"channel": channel, "has_source_url": bool(source_url)})
+                 {"channel": channel, "has_source_url": bool(source_url), "license_tier": tier})
     return r, token_raw, True
 
 
@@ -118,8 +131,24 @@ def attach_image(db: Session, report: Report, data: bytes, filename: str | None,
     if ev.is_graphic and not report.is_graphic:
         report.is_graphic = True
         report.graphic_reason = "; ".join(analysis.graphic_reasons) or "Automated screen flagged the image"
-    audit.record(db, actor, "evidence_attached", "report", report.id,
-                 {"evidence": ev.id, "sha256": ev.sha256, "graphic": ev.is_graphic})
+    forensics = analysis.forensics or {}
+    if forensics:
+        report.ai_scan_verdict = forensics.get("ai_scan_verdict")
+        report.ai_scan_summary = forensics.get("ai_scan_summary")
+        report.ai_forensics = forensics
+        report.commercial_eligible = bool(forensics.get("commercial_eligible", True)) and not bool(
+            report.duplicate_cluster_id
+        )
+    audit.record(
+        db, actor, "evidence_attached", "report", report.id,
+        {
+            "evidence": ev.id,
+            "sha256": ev.sha256,
+            "graphic": ev.is_graphic,
+            "ai_scan_verdict": report.ai_scan_verdict,
+            "commercial_eligible": report.commercial_eligible,
+        },
+    )
     return ev
 
 

@@ -59,6 +59,7 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const settingDestinationRef = useRef(false);
   const [heatEnabled, setHeatEnabled] = useState(true);
+  const [showDetourPlanner, setShowDetourPlanner] = useState(false);
   const [origin, setOrigin] = useState<[number, number] | null>(null);
   const [destination, setDestination] = useState<[number, number] | null>(null);
   const [route, setRoute] = useState<RouteAlternative | null>(null);
@@ -395,20 +396,23 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
     >
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Layer selector bar */}
+      {/* Layer selector bar (compact top-right, clear of top-left Leaflet +/- zoom buttons) */}
       <div
+        className="pz-leaflet-layer-bar"
         style={{
           position: 'absolute',
-          top: '12px',
-          right: '12px',
+          top: '10px',
+          right: '10px',
           zIndex: 1000,
-          background: 'rgba(255, 255, 255, 0.95)',
+          background: 'rgba(255, 255, 255, 0.96)',
           backdropFilter: 'blur(4px)',
           border: '1px solid #dce2dc',
           borderRadius: '6px',
-          padding: '3px',
+          padding: '2px',
           display: 'flex',
-          gap: '3px',
+          alignItems: 'center',
+          gap: '2px',
+          maxWidth: 'calc(100% - 58px)',
           boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
         }}
       >
@@ -421,9 +425,10 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
             color: activeLayer === 'osm' ? '#ffffff' : '#37463e',
             fontSize: '11px',
             fontWeight: 600,
-            padding: '4px 8px',
+            padding: '4px 7px',
             borderRadius: '4px',
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
         >
           Street
@@ -437,9 +442,10 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
             color: activeLayer === 'satellite' ? '#ffffff' : '#37463e',
             fontSize: '11px',
             fontWeight: 600,
-            padding: '4px 8px',
+            padding: '4px 7px',
             borderRadius: '4px',
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
         >
           Satellite
@@ -448,9 +454,17 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
           type="button"
           aria-pressed={heatEnabled}
           onClick={() => setHeatEnabled((enabled) => !enabled)}
-          style={{ border: 'none', background: heatEnabled ? '#b53d38' : 'transparent',
-            color: heatEnabled ? '#fff' : '#37463e', fontSize: '11px', fontWeight: 600,
-            padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+          style={{
+            border: 'none',
+            background: heatEnabled ? '#b53d38' : 'transparent',
+            color: heatEnabled ? '#fff' : '#37463e',
+            fontSize: '11px',
+            fontWeight: 600,
+            padding: '4px 7px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
         >
           Heat {heatEnabled ? 'On' : 'Off'}
         </button>
@@ -459,57 +473,213 @@ export const RealLeafletMap: React.FC<RealLeafletMapProps> = ({
           onClick={fitAllAlerts}
           disabled={alerts.length === 0}
           title="Show all verified incidents"
-          style={{ border: 'none', background: 'transparent', color: '#37463e', fontSize: '11px',
-            fontWeight: 600, padding: '4px 8px', borderRadius: '4px', cursor: alerts.length ? 'pointer' : 'default',
-            opacity: alerts.length ? 1 : 0.5 }}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: '#37463e',
+            fontSize: '11px',
+            fontWeight: 600,
+            padding: '4px 7px',
+            borderRadius: '4px',
+            cursor: alerts.length ? 'pointer' : 'default',
+            opacity: alerts.length ? 1 : 0.5,
+            whiteSpace: 'nowrap',
+          }}
         >
           Show all
         </button>
       </div>
 
-      <section aria-label="Route around selected incident" style={{ position: 'absolute', right: 12,
-        bottom: 46, zIndex: 1000, width: 'min(330px, calc(100% - 24px))', background: 'rgba(255,255,255,.96)',
-        border: '1px solid #dce2dc', borderRadius: 7, padding: 10, boxShadow: '0 2px 8px rgba(0,0,0,.12)',
-        display: 'grid', gap: 7 }}>
-        <strong style={{ fontSize: 12 }}>Plan around an incident</strong>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button type="button" className="pz-btn-secondary" style={{ minHeight: 32, padding: '4px 8px', fontSize: 11 }} onClick={useCurrentLocation} disabled={routeBusy}>
-            Use my location
-          </button>
-          <button type="button" className="pz-btn-secondary" style={{ minHeight: 32, padding: '4px 8px', fontSize: 11 }}
-            onClick={() => { settingDestinationRef.current = true; setRouteMessage('Click the map to set your destination.'); }}>
-            Set destination on map
-          </button>
-          <button type="button" className="pz-btn-primary" style={{ minHeight: 32, padding: '4px 8px', fontSize: 11 }} onClick={() => void findDetour()} disabled={routeBusy}>
-            {routeBusy ? 'Finding…' : 'Find detour'}
-          </button>
-          {(origin || destination || route) && <button type="button" className="pz-btn-secondary"
-            style={{ minHeight: 32, padding: '4px 8px', fontSize: 11 }} onClick={clearRoute} disabled={routeBusy}>
-            Clear route
-          </button>}
-        </div>
-        <small role="status" style={{ lineHeight: 1.35, whiteSpace: 'pre-line' }}>{routeMessage}</small>
-        <small style={{ color: '#5b6660', lineHeight: 1.3 }}>OSRM/OpenStreetMap estimate; no live road closures or traffic data. Confirm signs and official advice.</small>
-      </section>
+      {/* Collapsible Detour Planner Toggle / Drawer */}
+      {!showDetourPlanner ? (
+        <button
+          type="button"
+          data-testid="open-detour-planner-btn"
+          onClick={() => setShowDetourPlanner(true)}
+          aria-label="Open incident detour planner"
+          style={{
+            position: 'absolute',
+            right: '10px',
+            bottom: '24px',
+            zIndex: 1000,
+            background: 'rgba(255, 255, 255, 0.96)',
+            border: '1px solid #cbd5e1',
+            borderRadius: '999px',
+            padding: '5px 10px',
+            fontSize: '11.5px',
+            fontWeight: 600,
+            color: '#145438',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.14)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+          </svg>
+          <span>Plan detour</span>
+        </button>
+      ) : (
+        <section
+          aria-label="Route around selected incident"
+          data-testid="detour-planner-card"
+          style={{
+            position: 'absolute',
+            right: 10,
+            bottom: 26,
+            zIndex: 1001,
+            width: 'min(320px, calc(100% - 20px))',
+            maxHeight: 'calc(100% - 76px)',
+            overflowY: 'auto',
+            background: 'rgba(255,255,255,0.97)',
+            border: '1px solid #dce2dc',
+            borderRadius: 8,
+            padding: 10,
+            boxShadow: '0 4px 14px rgba(0,0,0,0.16)',
+            display: 'grid',
+            gap: 7,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <strong style={{ fontSize: 12, color: '#202a24' }}>Plan around an incident</strong>
+            <button
+              type="button"
+              data-testid="close-detour-planner-btn"
+              onClick={() => setShowDetourPlanner(false)}
+              aria-label="Close detour planner"
+              style={{
+                border: '1px solid #d9e1db',
+                background: '#f8fafc',
+                color: '#475569',
+                borderRadius: 4,
+                width: 24,
+                height: 24,
+                fontSize: 13,
+                lineHeight: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="pz-btn-secondary"
+              style={{ minHeight: 30, padding: '4px 8px', fontSize: 11 }}
+              onClick={useCurrentLocation}
+              disabled={routeBusy}
+            >
+              Use my location
+            </button>
+            <button
+              type="button"
+              className="pz-btn-secondary"
+              style={{ minHeight: 30, padding: '4px 8px', fontSize: 11 }}
+              onClick={() => {
+                settingDestinationRef.current = true;
+                setRouteMessage('Click the map to set your destination.');
+              }}
+            >
+              Set destination on map
+            </button>
+            <button
+              type="button"
+              className="pz-btn-primary"
+              style={{ minHeight: 30, padding: '4px 8px', fontSize: 11 }}
+              onClick={() => void findDetour()}
+              disabled={routeBusy}
+            >
+              {routeBusy ? 'Finding…' : 'Find detour'}
+            </button>
+            {(origin || destination || route) && (
+              <button
+                type="button"
+                className="pz-btn-secondary"
+                style={{ minHeight: 30, padding: '4px 8px', fontSize: 11 }}
+                onClick={clearRoute}
+                disabled={routeBusy}
+              >
+                Clear route
+              </button>
+            )}
+          </div>
+          <small role="status" style={{ lineHeight: 1.35, whiteSpace: 'pre-line', fontSize: 11 }}>
+            {routeMessage}
+          </small>
+          <small style={{ color: '#5b6660', lineHeight: 1.3, fontSize: 10.5 }}>
+            OSRM/OpenStreetMap estimate; confirm road signs locally.
+          </small>
+        </section>
+      )}
 
-      {/* Live active marker counter badge */}
+      {/* Compact active marker counter pill */}
       <div
         style={{
           position: 'absolute',
           bottom: '24px',
-          left: '12px',
-          zIndex: 1000,
-          background: 'rgba(255, 255, 255, 0.95)',
+          left: '10px',
+          zIndex: 999,
+          background: 'rgba(255, 255, 255, 0.94)',
           border: '1px solid #dce2dc',
-          borderRadius: '4px',
-          padding: '5px 9px',
-          fontSize: '11.5px',
+          borderRadius: '999px',
+          padding: '3px 8px',
+          fontSize: '11px',
           fontWeight: 600,
           color: '#145438',
+          maxWidth: 'calc(100% - 135px)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
           boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '5px',
         }}
       >
-        📍 Bulawayo · <strong>{alerts.length}</strong> verified alerts · Heat shows alert concentration
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ flexShrink: 0 }}
+        >
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+        <span>
+          Bulawayo · <strong>{alerts.length}</strong> verified alerts
+          <span className="pz-hide-mobile"> · Heat shows alert concentration</span>
+        </span>
       </div>
     </div>
   );

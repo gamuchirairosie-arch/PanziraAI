@@ -47,6 +47,13 @@ class User(Base, FlexModel):
     full_name = Column(String(255), nullable=True)
     name = Column(String(255), nullable=True)
     role = Column(String(50), nullable=False, default="journalist")
+    handle = Column(String(80), nullable=True)
+    phone = Column(String(40), nullable=True)
+    media_house = Column(String(160), nullable=True)
+    zmc_number = Column(String(80), nullable=True)
+    press_card_url = Column(String(500), nullable=True)
+    verification_status = Column(String(30), nullable=False, default="verified")
+    royalty_balance_usd = Column(Float, nullable=False, default=0.0)
     can_view_graphic = Column(Boolean, default=False, nullable=True)
     is_active = Column(Boolean, default=True)
     active = Column(Boolean, default=True)
@@ -57,6 +64,11 @@ class User(Base, FlexModel):
     # Synonyms
     fullName = synonym("full_name")
     isActive = synonym("is_active")
+    mediaHouse = synonym("media_house")
+    zmcNumber = synonym("zmc_number")
+    pressCardUrl = synonym("press_card_url")
+    verificationStatus = synonym("verification_status")
+    royaltyBalanceUsd = synonym("royalty_balance_usd")
 
     # Relationships
     audit_logs = relationship("AuditLog", back_populates="user")

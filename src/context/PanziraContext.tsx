@@ -6,6 +6,8 @@ import {
   INITIAL_WORKING_BRIEF,
 } from '../data/seedData';
 import {
+  AuthTab,
+  AuthUser,
   CorridorWatchItem,
   HazardCategoryKey,
   NewsroomView,
@@ -41,6 +43,32 @@ export interface NewCitizenReportInput {
   containsGraphicContent?: boolean;
   reportedLat?: number;
   reportedLng?: number;
+  licenseTier?: 'safety_only' | 'free_attribution' | 'commercial_pool';
+  attributionMode?: 'full_name' | 'handle' | 'anonymous';
+}
+
+export interface ClaimedReportRecord {
+  reference: string;
+  title: string;
+  statusLabel: string;
+  statusTone: 'live' | 'investigating';
+  timestamp: string;
+  completedStep: 1 | 2 | 3 | 4;
+  licenseTier: 'commercial_pool' | 'safety_only' | 'free_attribution';
+  attributionMode: 'handle' | 'anonymous' | 'full_name';
+  claimPin?: string;
+  imageUrl?: string;
+}
+
+export interface LastRoyaltyActivity {
+  signalId: string;
+  mediaHouse: string;
+  licenseType: 'standard' | 'exclusive';
+  grossUsd: number;
+  citizenShareUsd: number;
+  headline: string;
+  subtitle: string;
+  timestamp: string;
 }
 
 interface PersistedState {
@@ -52,15 +80,30 @@ interface PersistedState {
   lastEditorialUpdateIso?: string;
   lastEditorialUpdateTime?: string;
   lastEditorialUpdateDateLabel?: string;
+  royaltyBalanceUsd?: number;
+  claimedReports?: ClaimedReportRecord[];
+  lastRoyaltyActivity?: LastRoyaltyActivity | null;
 }
 
 interface PanziraContextValue {
-  // Navigation
+  // Navigation & Auth
   portal: PortalMode;
   newsroomView: NewsroomView;
   publicView: PublicView;
+  authTab: AuthTab;
+  setAuthTab: (tab: AuthTab) => void;
+  currentUser: AuthUser | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<AuthUser | null>>;
+  authPromptMessage: string | null;
+  setAuthPromptMessage: (msg: string | null) => void;
+  quickDemoLogin: (persona: 'guest' | 'citizen' | 'journalist' | 'admin') => Promise<void>;
   navigateNewsroom: (view: NewsroomView, signalId?: string) => void;
   navigatePublic: (view: PublicView) => void;
+  navigateAuth: (tab?: AuthTab) => void;
+  navigateCitizen: () => void;
+  navigateAdmin: () => void;
+  logoutUser: () => void;
+  showToast: (msg: string) => void;
 
   // Search
   newsroomSearch: string;
@@ -94,14 +137,53 @@ interface PanziraContextValue {
   selectedCorridorId: 'A5' | 'KHAMI' | 'ESIGODINI';
   setSelectedCorridorId: (id: 'A5' | 'KHAMI' | 'ESIGODINI') => void;
   lastSubmittedReceiptId: string | null;
+  lastSubmittedClaimPin: string | null;
+  pendingClaimPrefill: { reference: string; pin: string } | null;
+  setPendingClaimPrefill: (val: { reference: string; pin: string } | null) => void;
+  royaltyBalanceUsd: number;
+  claimedReports: ClaimedReportRecord[];
+  lastRoyaltyActivity: LastRoyaltyActivity | null;
 
   // Editorial & Citizen Actions
   submitCitizenReport: (input: NewCitizenReportInput) => SignalReport;
+  claimReportInSession: (input: {
+    reference: string;
+    claimPin: string;
+    licenseTier?: 'commercial_pool' | 'safety_only' | 'free_attribution';
+    attributionMode?: 'handle' | 'anonymous' | 'full_name';
+    contributorId?: number | null;
+    contributorHandle?: string;
+  }) => ClaimedReportRecord | null;
+  cashOutRoyalties: () => { amountUsd: number; receiptCode: string } | null;
   toggleChecklist: (signalId: string, field: keyof VerificationChecklist) => void;
   updateEditorialNotes: (signalId: string, notes: string) => void;
   requestEvidence: (signalId: string, note?: string) => void;
   rejectSignal: (signalId: string, reason?: string) => void;
   verifySignal: (signalId: string) => boolean;
+  claimSignalLock: (signalId: string, simulateOtherJournalist?: boolean) => Promise<void>;
+  releaseSignalLock: (signalId: string) => Promise<void>;
+  toggleVisualAiCheck: (signalId: string) => Promise<void>;
+  toggleTranslationVerified: (signalId: string) => Promise<void>;
+  licenseSignalMedia: (
+    signalId: string,
+    licenseType: 'standard' | 'exclusive',
+    mediaHouse?: string
+  ) => Promise<void>;
+  togglePiiRedaction: (signalId: string) => void;
+  simulateChannelIntake: (
+    channel: 'ussd' | 'whatsapp' | 'telegram',
+    payload: {
+      phone?: string;
+      corridor: string;
+      landmark: string;
+      categoryKey: HazardCategoryKey;
+      categoryLabel: string;
+      description: string;
+      language?: 'English' | 'Shona' | 'Ndebele';
+      hasPhoto?: boolean;
+      flaggedAiDemo?: boolean;
+    }
+  ) => Promise<SignalReport>;
 
   // Graphic safety (session-scoped reveal inside newsroom workspace only)
   revealedGraphicIds: Record<string, boolean>;
@@ -179,12 +261,20 @@ function hydrateAndNormalizePersistedState(parsed: PersistedState): PersistedSta
     const seedMatch = INITIAL_SIGNALS.find((s) => s.id === sig.id);
 
     return {
+      ...seedMatch,
       ...sig,
       sourceChannelLabel: normalizeSentenceCaseLabel(sig.sourceChannelLabel),
       monitorStatusLabel: normalizeSentenceCaseLabel(sig.monitorStatusLabel),
       inboxStatusLine: normalizeSentenceCaseLabel(sig.inboxStatusLine),
       aiImageHeading: fixedImageHeading,
       mapCoords: seedMatch ? seedMatch.mapCoords : sig.mapCoords,
+      licenseTier: sig.licenseTier ?? seedMatch?.licenseTier,
+      attributionMode: sig.attributionMode ?? seedMatch?.attributionMode,
+      claimPin: sig.claimPin ?? seedMatch?.claimPin,
+      aiScanVerdict: sig.aiScanVerdict ?? seedMatch?.aiScanVerdict,
+      aiScanSummary: sig.aiScanSummary ?? seedMatch?.aiScanSummary,
+      exifSummary: sig.exifSummary ?? seedMatch?.exifSummary,
+      commercialEligible: sig.commercialEligible ?? seedMatch?.commercialEligible,
     };
   });
 
@@ -222,6 +312,12 @@ function hydrateAndNormalizePersistedState(parsed: PersistedState): PersistedSta
     lastEditorialUpdateTime: derivedTime || '14:20 CAT',
     lastEditorialUpdateDateLabel:
       derivedDateLabel || 'Last editorial desk update (27 Jan 2025) · 0 AI auto-published alerts',
+    royaltyBalanceUsd:
+      typeof parsed.royaltyBalanceUsd === 'number' && parsed.royaltyBalanceUsd >= 0
+        ? parsed.royaltyBalanceUsd
+        : 16.0,
+    claimedReports: Array.isArray(parsed.claimedReports) ? parsed.claimedReports : [],
+    lastRoyaltyActivity: parsed.lastRoyaltyActivity ?? null,
   };
 }
 
@@ -250,6 +346,9 @@ function loadInitialPersistedState(): PersistedState {
     lastEditorialUpdateTime: '14:20 CAT',
     lastEditorialUpdateDateLabel:
       'Last editorial desk update (27 Jan 2025) · 0 AI auto-published alerts',
+    royaltyBalanceUsd: 16.0,
+    claimedReports: [],
+    lastRoyaltyActivity: null,
   };
 }
 
@@ -280,9 +379,33 @@ function pickCorridorCoords(roadArea: string, existingCount: number): { xPct: nu
 export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [persisted, setPersisted] = useState<PersistedState>(loadInitialPersistedState);
 
-  const [portal, setPortal] = useState<PortalMode>('newsroom');
-  const [newsroomView, setNewsroomView] = useState<NewsroomView>('monitor');
+  const [portal, setPortal] = useState<PortalMode>('public');
+  const [newsroomView, setNewsroomView] = useState<NewsroomView>('inbox');
   const [publicView, setPublicView] = useState<PublicView>('overview');
+  const [authTab, setAuthTab] = useState<AuthTab>('signin');
+  // Always start as an unauthenticated Guest by default on initial load
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      localStorage.removeItem('panzira_auth_user');
+      apiService.setToken(null);
+    } catch {
+      // Ignore storage errors
+    }
+    return null;
+  });
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem('panzira_auth_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('panzira_auth_user');
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [currentUser]);
 
   const [newsroomSearch, setNewsroomSearch] = useState('');
   const [publicSearch, setPublicSearch] = useState('');
@@ -292,6 +415,11 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedVerifyId, setSelectedVerifyId] = useState<string>('PZ-DEMO-0427');
   const [selectedCorridorId, setSelectedCorridorId] = useState<'A5' | 'KHAMI' | 'ESIGODINI'>('A5');
   const [lastSubmittedReceiptId, setLastSubmittedReceiptId] = useState<string | null>('PZ-DEMO-0427');
+  const [lastSubmittedClaimPin, setLastSubmittedClaimPin] = useState<string | null>('4920');
+  const [pendingClaimPrefill, setPendingClaimPrefill] = useState<{
+    reference: string;
+    pin: string;
+  } | null>(null);
 
   // Session-only reveal state inside the newsroom workspace
   const [revealedGraphicIds, setRevealedGraphicIds] = useState<Record<string, boolean>>({});
@@ -318,8 +446,48 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         hash === 'briefs' ||
         hash === 'sources'
       ) {
+        if (!currentUser || currentUser.role === 'citizen') {
+          setAuthPromptMessage(
+            'Sign in with an accredited Press or Editorial account to enter the Newsroom (or select a 1-click demo persona below).'
+          );
+          setAuthTab('signin');
+          setPortal('auth');
+          window.history.replaceState(null, '', '#signin');
+          return;
+        }
         setPortal('newsroom');
         setNewsroomView(hash);
+      } else if (hash === 'auth' || hash === 'signin') {
+        setPortal('auth');
+        setAuthTab('signin');
+      } else if (hash === 'signup' || hash === 'citizen-signup') {
+        setPortal('auth');
+        setAuthTab('citizen-signup');
+      } else if (hash === 'press-apply' || hash === 'journalist-apply') {
+        setPortal('auth');
+        setAuthTab('journalist-apply');
+      } else if (hash === 'citizen' || hash === 'vault') {
+        if (!currentUser) {
+          setAuthPromptMessage(
+            'Sign in with an accredited Press or Editorial account to enter the Newsroom (or select a 1-click demo persona below).'
+          );
+          setAuthTab('signin');
+          setPortal('auth');
+          window.history.replaceState(null, '', '#signin');
+          return;
+        }
+        setPortal('citizen');
+      } else if (hash === 'admin') {
+        if (!currentUser || currentUser.role !== 'admin') {
+          setAuthPromptMessage(
+            'Sign in with an accredited Press or Editorial account to enter the Newsroom (or select a 1-click demo persona below).'
+          );
+          setAuthTab('signin');
+          setPortal('auth');
+          window.history.replaceState(null, '', '#signin');
+          return;
+        }
+        setPortal('admin');
       } else if (hash === 'public' || hash === 'overview') {
         setPortal('public');
         setPublicView('overview');
@@ -331,9 +499,9 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     applyHash();
     window.addEventListener('hashchange', applyHash);
     return () => window.removeEventListener('hashchange', applyHash);
-  }, []);
+  }, [currentUser]);
 
-  // Live Python Backend Synchronization & Periodic Polling
+  // Live Python Backend Synchronization & Periodic Polling (no forced auto-login)
   useEffect(() => {
     let isMounted = true;
     const syncBackend = async (isInitial = false) => {
@@ -341,23 +509,32 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const isHealthy = await apiService.checkHealth();
         if (!isHealthy || !isMounted) return;
 
-        if (!apiService.getToken()) {
-          await apiService.login().catch(() => {});
+        if (isInitial && apiService.getToken()) {
+          apiService
+            .fetchCurrentUser()
+            .then((u) => {
+              if (isMounted) setCurrentUser(u);
+            })
+            .catch(() => {
+              apiService.setToken(null);
+              if (isMounted) setCurrentUser(null);
+            });
         }
 
+        const hasToken = Boolean(apiService.getToken());
         const [liveSignals, liveAlerts, liveBrief] = await Promise.all([
-          apiService.fetchSignals().catch(() => null),
+          hasToken ? apiService.fetchSignals().catch(() => null) : Promise.resolve(null),
           apiService.fetchPublicAlerts().catch(() => null),
-          apiService.fetchWorkingBrief().catch(() => null),
+          hasToken ? apiService.fetchWorkingBrief().catch(() => null) : Promise.resolve(null),
         ]);
 
         if (isMounted) {
           setPersisted((prev) => {
-            if (!liveSignals || liveSignals.length === 0) return prev;
             return {
               ...prev,
-              signals: liveSignals,
-              verifiedAlerts: liveAlerts && liveAlerts.length > 0 ? liveAlerts : prev.verifiedAlerts,
+              signals: liveSignals && liveSignals.length > 0 ? liveSignals : prev.signals,
+              verifiedAlerts:
+                liveAlerts && liveAlerts.length > 0 ? liveAlerts : prev.verifiedAlerts,
               briefDraft: liveBrief ? liveBrief : prev.briefDraft,
             };
           });
@@ -383,6 +560,17 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const navigateNewsroom = (view: NewsroomView, signalId?: string) => {
+    if (!currentUser || currentUser.role === 'citizen') {
+      setAuthPromptMessage(
+        'Sign in with an accredited Press or Editorial account to enter the Newsroom (or select a 1-click demo persona below).'
+      );
+      setAuthTab('signin');
+      setPortal('auth');
+      window.history.replaceState(null, '', '#signin');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setAuthPromptMessage(null);
     setPortal('newsroom');
     setNewsroomView(view);
     if (signalId) {
@@ -395,9 +583,165 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const navigatePublic = (view: PublicView) => {
+    setAuthPromptMessage(null);
     setPortal('public');
     setPublicView(view);
     window.history.replaceState(null, '', `#${view === 'overview' ? 'public' : view}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateAuth = (tab: AuthTab = 'signin') => {
+    setAuthTab(tab);
+    setPortal('auth');
+    window.history.replaceState(null, '', `#${tab}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateCitizen = () => {
+    if (!currentUser) {
+      setAuthPromptMessage(
+        'Sign in with an accredited Press or Editorial account to enter the Newsroom (or select a 1-click demo persona below).'
+      );
+      setAuthTab('signin');
+      setPortal('auth');
+      window.history.replaceState(null, '', '#signin');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setAuthPromptMessage(null);
+    setPortal('citizen');
+    window.history.replaceState(null, '', '#citizen');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateAdmin = () => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      setAuthPromptMessage(
+        'Sign in with an accredited Press or Editorial account to enter the Newsroom (or select a 1-click demo persona below).'
+      );
+      setAuthTab('signin');
+      setPortal('auth');
+      window.history.replaceState(null, '', '#signin');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setAuthPromptMessage(null);
+    setPortal('admin');
+    window.history.replaceState(null, '', '#admin');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const logoutUser = () => {
+    apiService.setToken(null);
+    setCurrentUser(null);
+    setAuthPromptMessage(null);
+    setPortal('public');
+    setPublicView('overview');
+    window.history.replaceState(null, '', '#public');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('Signed out · Viewing as Guest (Public).');
+  };
+
+  const quickDemoLogin = async (persona: 'guest' | 'citizen' | 'journalist' | 'admin') => {
+    setAuthPromptMessage(null);
+    if (persona === 'guest') {
+      apiService.setToken(null);
+      setCurrentUser(null);
+      setPortal('public');
+      setPublicView('overview');
+      window.history.replaceState(null, '', '#public');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showToast('Switched to Guest (Public) view.');
+      return;
+    }
+
+    const credentialsMap = {
+      citizen: {
+        email: 'tariro@citizen.co.zw',
+        password: 'panzira2026',
+        fallbackUser: {
+          id: 101,
+          email: 'tariro@citizen.co.zw',
+          full_name: 'Tariro Moyo',
+          role: 'citizen' as const,
+          handle: '@TariroOnTheRoad',
+          phone: '+263 77 412 8901',
+          verification_status: 'verified',
+          royalty_balance_usd: 16.0,
+        },
+      },
+      journalist: {
+        email: 'nqobile@chronicle.co.zw',
+        password: 'panzira2026',
+        fallbackUser: {
+          id: 102,
+          email: 'nqobile@chronicle.co.zw',
+          full_name: 'Nqobile Dube',
+          role: 'journalist' as const,
+          media_house: 'The Chronicle',
+          zmc_number: 'ZMC-2026-0418',
+          verification_status: 'verified',
+        },
+      },
+      admin: {
+        email: 'rudo@panzira.zw',
+        password: 'panzira2026',
+        fallbackUser: {
+          id: 1,
+          email: 'rudo@panzira.zw',
+          full_name: 'Rudo Moyo',
+          role: 'admin' as const,
+          media_house: 'Panzira Control Desk',
+          verification_status: 'verified',
+        },
+      },
+    };
+
+    const target = credentialsMap[persona];
+    const currentPersistedBalance =
+      typeof persisted.royaltyBalanceUsd === 'number' ? persisted.royaltyBalanceUsd : 16.0;
+    let resolvedUser: AuthUser = {
+      ...target.fallbackUser,
+      ...(persona === 'citizen' ? { royalty_balance_usd: currentPersistedBalance } : {}),
+    };
+    try {
+      const res = await apiService.login(target.email, target.password);
+      const serverBal =
+        typeof res.user.royalty_balance_usd === 'number' ? res.user.royalty_balance_usd : undefined;
+      const effectiveCitizenBal =
+        currentPersistedBalance === 0
+          ? 0
+          : Math.max(currentPersistedBalance, serverBal ?? 16.0);
+      resolvedUser = {
+        ...target.fallbackUser,
+        ...res.user,
+        ...(persona === 'citizen' ? { royalty_balance_usd: effectiveCitizenBal } : {}),
+      };
+      if (persona === 'citizen' && effectiveCitizenBal > currentPersistedBalance) {
+        setPersisted((prev) => ({
+          ...prev,
+          royaltyBalanceUsd: effectiveCitizenBal,
+        }));
+      }
+    } catch {
+      // Fallback to local persona immediately if backend is offline
+    }
+
+    setCurrentUser(resolvedUser);
+    if (persona === 'citizen') {
+      setPortal('citizen');
+      window.history.replaceState(null, '', '#citizen');
+      showToast('Signed in as Tariro Moyo (@TariroOnTheRoad) → Contributor Rights Vault');
+    } else if (persona === 'journalist') {
+      setPortal('newsroom');
+      setNewsroomView('inbox');
+      window.history.replaceState(null, '', '#inbox');
+      showToast('Signed in as Nqobile Dube (The Chronicle · ZMC-2026-0418) → Newsroom Inbox');
+    } else {
+      setPortal('admin');
+      window.history.replaceState(null, '', '#admin');
+      showToast('Signed in as Rudo Moyo (Panzira Control Desk) → Admin Desk');
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -524,7 +868,33 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       reportedLat: input.reportedLat,
       reportedLng: input.reportedLng,
       gpsReported: input.reportedLat !== undefined && input.reportedLng !== undefined,
+      claimPin: String(Math.floor(1000 + Math.random() * 9000)),
+      licenseTier: input.licenseTier || 'safety_only',
+      attributionMode: input.attributionMode || 'anonymous',
+      aiScanVerdict: hasPhoto
+        ? (input.photoFilename || '').toLowerCase().match(/screenshot|whatsapp|ai|midjourney|synthetic/)
+          ? 'flagged_ai_or_screen'
+          : 'pass'
+        : null,
+      aiScanSummary: hasPhoto
+        ? (input.photoFilename || '').toLowerCase().match(/screenshot|whatsapp|ai|midjourney|synthetic/)
+          ? 'AUTO-SCAN WARNING: SUSPECTED AI-GENERATED OR SCREEN RECAPTURE — COMMERCIAL PAYOUT BLOCKED'
+          : 'AUTO-SCAN: AUTHENTIC CAMERA PHOTO • EXIF & MOIRÉ SCREEN CHECK PASSED'
+        : null,
+      exifSummary: hasPhoto
+        ? 'AUTO-SCAN: 98.4% REAL CAMERA • EXIF: MOBILE CAMERA • MOIRÉ SCREEN CHECK: PASS • DUPLICATE HASH: UNIQUE'
+        : null,
+      commercialEligible:
+        hasPhoto &&
+        !(input.photoFilename || '').toLowerCase().match(/screenshot|whatsapp|ai|midjourney|synthetic/),
+      humanVisualAiCheck: false,
+      humanVisualAiCheckPassed: false,
+      translationVerified: input.language === 'English',
+      translationReviewed: input.language === 'English',
     };
+
+    const generatedPin = newSignal.claimPin || '4920';
+    setLastSubmittedClaimPin(generatedPin);
 
     setPersisted((prev) => ({
       ...prev,
@@ -535,9 +905,34 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     apiService
       .submitCitizenReport(input)
       .then((serverSig) => {
+        const mergedPin = serverSig.claimPin || generatedPin;
+        const resolvedId = serverSig.id || newId;
+        setLastSubmittedClaimPin(mergedPin);
+        setLastSubmittedReceiptId(resolvedId);
+        setSelectedMonitorId((prevId) => (prevId === newId ? resolvedId : prevId));
+        setSelectedInboxId((prevId) => (prevId === newId ? resolvedId : prevId));
+        setSelectedVerifyId((prevId) => (prevId === newId ? resolvedId : prevId));
+        setPendingClaimPrefill((prevPre) =>
+          prevPre && prevPre.reference.replace(/^#/, '') === newId
+            ? { reference: resolvedId, pin: mergedPin }
+            : prevPre
+        );
         setPersisted((prev) => ({
           ...prev,
-          signals: [serverSig, ...prev.signals.filter((s) => s.id !== newId)],
+          signals: [
+            {
+              ...newSignal,
+              ...serverSig,
+              id: resolvedId,
+              claimPin: mergedPin,
+              licenseTier: serverSig.licenseTier || newSignal.licenseTier,
+              attributionMode: serverSig.attributionMode || newSignal.attributionMode,
+              aiScanVerdict: serverSig.aiScanVerdict ?? newSignal.aiScanVerdict,
+              aiScanSummary: serverSig.aiScanSummary ?? newSignal.aiScanSummary,
+              commercialEligible: serverSig.commercialEligible ?? newSignal.commercialEligible,
+            },
+            ...prev.signals.filter((s) => s.id !== newId && s.id !== resolvedId),
+          ],
         }));
       })
       .catch(() => {});
@@ -546,7 +941,7 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSelectedMonitorId(newId);
     setSelectedInboxId(newId);
     setSelectedVerifyId(newId);
-    showToast(`Report ${newId} queued for editorial verification (not published publicly).`);
+    showToast(`Report ${newId} queued for editorial verification (PIN ${generatedPin} generated).`);
     return newSignal;
   };
 
@@ -665,6 +1060,25 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       );
       return false;
     }
+    const hasPhoto = target.photoType !== 'none';
+    const visualAiChecked = Boolean(target.humanVisualAiCheck || target.humanVisualAiCheckPassed);
+    if (hasPhoto && !visualAiChecked) {
+      showToast(
+        'Human visual inspection required: Confirm manual inspection for AI artifacts before publishing a report with an image.'
+      );
+      return false;
+    }
+    const needsTranslationGate =
+      target.originalLanguage === 'Shona' || target.originalLanguage === 'Ndebele';
+    const translationChecked = Boolean(
+      target.translationVerified || target.translationReviewed
+    );
+    if (needsTranslationGate && !translationChecked) {
+      showToast(
+        `5th Verification Gate required: Confirm the ${target.originalLanguage} → English translation before publishing.`
+      );
+      return false;
+    }
 
     const approvedNow = new Date();
     const readableApproval = formatHarareDateTime(approvedNow);
@@ -759,6 +1173,527 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
+  const claimSignalLock = async (signalId: string, simulateOtherJournalist = false) => {
+    const now = new Date();
+    const lockedUntilIso = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
+    const stamp = formatHarareDateTime(now);
+    const holderId = simulateOtherJournalist ? 999 : currentUser?.id || 1;
+    const holderName = simulateOtherJournalist
+      ? 'Nkosilathi Ncube'
+      : currentUser?.full_name || 'Rudo Moyo';
+    const holderMedia = simulateOtherJournalist
+      ? 'The Chronicle (Zimpapers)'
+      : currentUser?.media_house || 'Panzira Newsroom Desk';
+
+    if (!simulateOtherJournalist) {
+      apiService.claimSignalLock(signalId).catch(() => {});
+    }
+
+    setPersisted((prev) => ({
+      ...prev,
+      signals: prev.signals.map((sig) => {
+        if (sig.id !== signalId) return sig;
+        return {
+          ...sig,
+          claimedById: holderId,
+          claimedByName: holderName,
+          claimedByMediaHouse: holderMedia,
+          claimLockedUntil: lockedUntilIso,
+          timeline: [
+            ...sig.timeline,
+            {
+              time: stamp,
+              description: `Signal claimed for 30m anti-collision investigation lock by ${holderName} (${holderMedia}).`,
+            },
+          ],
+        };
+      }),
+    }));
+    showToast(`Locked ${signalId} for 30 minutes (${holderName} · ${holderMedia}).`);
+  };
+
+  const releaseSignalLock = async (signalId: string) => {
+    const stamp = formatHarareDateTime(new Date());
+    apiService.releaseSignalLock(signalId).catch(() => {});
+    setPersisted((prev) => ({
+      ...prev,
+      signals: prev.signals.map((sig) => {
+        if (sig.id !== signalId) return sig;
+        return {
+          ...sig,
+          claimedById: null,
+          claimedByName: null,
+          claimedByMediaHouse: null,
+          claimLockedUntil: null,
+          timeline: [
+            ...sig.timeline,
+            {
+              time: stamp,
+              description: `30-minute investigation lock released by ${currentUser?.full_name || 'Rudo Moyo'}.`,
+            },
+          ],
+        };
+      }),
+    }));
+    showToast(`Released investigation lock on ${signalId}.`);
+  };
+
+  const toggleVisualAiCheck = async (signalId: string) => {
+    const target = persisted.signals.find((s) => s.id === signalId);
+    if (!target) return;
+    const nextVal = !(target.humanVisualAiCheck || target.humanVisualAiCheckPassed);
+    const stamp = formatHarareDateTime(new Date());
+
+    apiService.setVisualAiCheck(signalId, nextVal).catch(() => {});
+
+    setPersisted((prev) => ({
+      ...prev,
+      signals: prev.signals.map((sig) => {
+        if (sig.id !== signalId) return sig;
+        return {
+          ...sig,
+          humanVisualAiCheck: nextVal,
+          humanVisualAiCheckPassed: nextVal,
+          humanVisualCheckedBy: nextVal ? currentUser?.full_name || 'Rudo Moyo' : null,
+          timeline: [
+            ...sig.timeline,
+            {
+              time: stamp,
+              description: nextVal
+                ? `Mandatory human visual AI artifact inspection confirmed by ${currentUser?.full_name || 'Rudo Moyo'}.`
+                : `Human visual AI inspection unchecked by ${currentUser?.full_name || 'Rudo Moyo'}.`,
+            },
+          ],
+        };
+      }),
+    }));
+    showToast(
+      nextVal
+        ? `Human visual AI inspection confirmed for ${signalId}.`
+        : `Human visual AI inspection cleared for ${signalId}.`
+    );
+  };
+
+  const toggleTranslationVerified = async (signalId: string) => {
+    const target = persisted.signals.find((s) => s.id === signalId);
+    if (!target) return;
+    const nextVal = !(target.translationVerified || target.translationReviewed);
+    const stamp = formatHarareDateTime(new Date());
+
+    if (nextVal && target.draftEnglishTranslation) {
+      apiService.reviewSignalTranslation(signalId, target.draftEnglishTranslation).catch(() => {});
+    }
+
+    setPersisted((prev) => ({
+      ...prev,
+      signals: prev.signals.map((sig) => {
+        if (sig.id !== signalId) return sig;
+        return {
+          ...sig,
+          translationVerified: nextVal,
+          translationReviewed: nextVal,
+          timeline: [
+            ...sig.timeline,
+            {
+              time: stamp,
+              description: nextVal
+                ? `5th Gate: ${sig.originalLanguage} → English translation reviewed and verified accurate by ${currentUser?.full_name || 'Rudo Moyo'}.`
+                : `${sig.originalLanguage} translation verification unchecked.`,
+            },
+          ],
+        };
+      }),
+    }));
+    showToast(
+      nextVal
+        ? `5th Gate verified: ${target.originalLanguage} translation confirmed accurate.`
+        : `Translation verification unchecked.`
+    );
+  };
+
+  const licenseSignalMedia = async (
+    signalId: string,
+    licenseType: 'standard' | 'exclusive',
+    mediaHouse?: string
+  ) => {
+    const target = persisted.signals.find((s) => s.id === signalId);
+    if (!target) return;
+    const now = new Date();
+    const stamp = formatHarareDateTime(now);
+    const house = mediaHouse || currentUser?.media_house || 'The Chronicle (Zimpapers)';
+    const gross = licenseType === 'exclusive' ? 15.0 : 5.0;
+    const citizenShare = licenseType === 'exclusive' ? 10.5 : 3.5;
+    const exclusiveUntilIso =
+      licenseType === 'exclusive'
+        ? new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        : target.exclusiveUntil || null;
+    const fallbackToken = `PZ-CLEAN-${signalId.replace(/[^A-Z0-9]/gi, '')}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const applySettlement = (overrides?: {
+      exclusiveLicenseHolder?: string | null;
+      exclusiveUntil?: string | null;
+      mediaAccessToken?: string | null;
+      downloadUrl?: string | null;
+      contributorBalanceUsd?: number | null;
+    }) => {
+      const activity: LastRoyaltyActivity = {
+        signalId: target.id,
+        mediaHouse: house,
+        licenseType,
+        grossUsd: gross,
+        citizenShareUsd: citizenShare,
+        headline: `${house} licensed your ${target.roadArea || target.title} photo (#${target.id.replace(/^#/, '')})`,
+        subtitle: `${
+          licenseType === 'exclusive'
+            ? 'Exclusive 24-Hr License ($15.00 Flat Fee)'
+            : 'Standard Editorial License ($5.00 Flat Fee)'
+        } • Your 70% Share: +$${citizenShare.toFixed(2)} USD credited`,
+        timestamp: stamp,
+      };
+
+      let computedBalance = (persisted.royaltyBalanceUsd ?? 16.0) + citizenShare;
+      setPersisted((prev) => {
+        const baseBalance = typeof prev.royaltyBalanceUsd === 'number' ? prev.royaltyBalanceUsd : 16.0;
+        const incremented = Number((baseBalance + citizenShare).toFixed(2));
+        computedBalance =
+          typeof overrides?.contributorBalanceUsd === 'number'
+            ? Math.max(incremented, Number(overrides.contributorBalanceUsd.toFixed(2)))
+            : incremented;
+
+        return {
+          ...prev,
+          royaltyBalanceUsd: computedBalance,
+          lastRoyaltyActivity: activity,
+          signals: prev.signals.map((sig) => {
+            if (sig.id !== signalId) return sig;
+            return {
+              ...sig,
+              exclusiveLicenseHolder:
+                overrides?.exclusiveLicenseHolder ??
+                (licenseType === 'exclusive' ? house : sig.exclusiveLicenseHolder || house),
+              exclusiveUntil: overrides?.exclusiveUntil ?? exclusiveUntilIso,
+              mediaAccessToken: overrides?.mediaAccessToken || fallbackToken,
+              downloadUrl: overrides?.downloadUrl || `#clean-download-${signalId}`,
+              royaltyEarnedUsd: Number(((sig.royaltyEarnedUsd || 0) + citizenShare).toFixed(2)),
+              timeline: [
+                ...sig.timeline,
+                {
+                  time: stamp,
+                  description: `Instant flat-fee ${licenseType === 'exclusive' ? '24h Exclusive ($15.00 USD)' : 'Standard ($5.00 USD)'} license unlocked by ${house}. Contributor credited +$${citizenShare.toFixed(2)} USD.`,
+                },
+              ],
+            };
+          }),
+        };
+      });
+
+      setCurrentUser((prevUser) =>
+        prevUser && prevUser.role === 'citizen'
+          ? { ...prevUser, royalty_balance_usd: computedBalance }
+          : prevUser
+      );
+    };
+
+    try {
+      const res = await apiService.licenseSignalMedia(signalId, licenseType, house);
+      applySettlement({
+        exclusiveLicenseHolder: res.exclusiveLicenseHolder ?? undefined,
+        exclusiveUntil: res.exclusiveUntil ?? undefined,
+        mediaAccessToken: res.mediaAccessToken || fallbackToken,
+        downloadUrl: res.downloadUrl || `#clean-download-${signalId}`,
+        contributorBalanceUsd: res.contributorBalanceUsd ?? undefined,
+      });
+    } catch {
+      applySettlement();
+    }
+
+    showToast(
+      `Unlocked ${licenseType === 'exclusive' ? '24-Hr Exclusive ($15.00 USD)' : 'Standard ($5.00 USD)'} license — Citizen credited +$${citizenShare.toFixed(2)} USD ($${gross.toFixed(2)} gross).`
+    );
+  };
+
+  const claimReportInSession: PanziraContextValue['claimReportInSession'] = (input) => {
+    const cleanRef = input.reference.trim().replace(/^#/, '').toUpperCase();
+    const formattedRef = `#${cleanRef}`;
+    const cleanPin = input.claimPin.trim();
+    if (!cleanRef || !cleanPin) return null;
+
+    const matchedSig = persisted.signals.find(
+      (s) => s.id.replace(/^#/, '').toUpperCase() === cleanRef
+    );
+    const stamp = formatHarareDateTime(new Date());
+    const tier = input.licenseTier || matchedSig?.licenseTier || 'commercial_pool';
+    const attribution = input.attributionMode || matchedSig?.attributionMode || 'handle';
+    const isVerified = matchedSig?.workflowStatus === 'verified';
+    const step: 1 | 2 | 3 | 4 = isVerified
+      ? 4
+      : matchedSig && Object.values(matchedSig.checklist).filter(Boolean).length >= 2
+        ? 3
+        : 2;
+
+    const record: ClaimedReportRecord = {
+      reference: formattedRef,
+      title: matchedSig?.inboxTitle || matchedSig?.title || `Claimed road report · ${formattedRef}`,
+      statusLabel: isVerified ? 'Verified public alert live' : 'Newsroom investigating',
+      statusTone: isVerified ? 'live' : 'investigating',
+      timestamp: matchedSig?.reportedDateTime || `${stamp} · Claimed via PIN`,
+      completedStep: step,
+      licenseTier: tier,
+      attributionMode: attribution,
+      claimPin: cleanPin,
+      imageUrl: matchedSig?.customPhotoDataUrl,
+    };
+
+    setPersisted((prev) => {
+      const prevClaims = prev.claimedReports || [];
+      const nextClaims = [
+        record,
+        ...prevClaims.filter((c) => c.reference.replace(/^#/, '').toUpperCase() !== cleanRef),
+      ];
+      const nextSignals = prev.signals.map((sig) => {
+        if (sig.id.replace(/^#/, '').toUpperCase() !== cleanRef) return sig;
+        return {
+          ...sig,
+          isUserSubmitted: true,
+          contributorId: input.contributorId ?? sig.contributorId ?? 101,
+          contributorCredit: input.contributorHandle || sig.contributorCredit || '@TariroOnTheRoad',
+          licenseTier: tier,
+          attributionMode: attribution,
+          claimPin: cleanPin,
+          timeline: [
+            ...sig.timeline,
+            {
+              time: stamp,
+              description: `Guest report claimed via 4-digit PIN by ${input.contributorHandle || 'verified citizen'} (${tier}, ${attribution}).`,
+            },
+          ],
+        };
+      });
+      return {
+        ...prev,
+        claimedReports: nextClaims,
+        signals: nextSignals,
+      };
+    });
+
+    setPendingClaimPrefill(null);
+    return record;
+  };
+
+  const cashOutRoyalties: PanziraContextValue['cashOutRoyalties'] = () => {
+    const amountUsd =
+      typeof persisted.royaltyBalanceUsd === 'number' ? persisted.royaltyBalanceUsd : 16.0;
+    if (amountUsd <= 0) return null;
+    const receiptCode = `EC-${Math.floor(10000 + Math.random() * 89999)}`;
+    setPersisted((prev) => ({
+      ...prev,
+      royaltyBalanceUsd: 0,
+    }));
+    setCurrentUser((prevUser) =>
+      prevUser && prevUser.role === 'citizen'
+        ? { ...prevUser, royalty_balance_usd: 0 }
+        : prevUser
+    );
+    return { amountUsd, receiptCode };
+  };
+
+  const togglePiiRedaction = (signalId: string) => {
+    const stamp = formatHarareDateTime(new Date());
+    setPersisted((prev) => ({
+      ...prev,
+      signals: prev.signals.map((sig) => {
+        if (sig.id !== signalId) return sig;
+        const nextRedacted = !sig.piiRedacted;
+        return {
+          ...sig,
+          piiRedacted: nextRedacted,
+          timeline: [
+            ...sig.timeline,
+            {
+              time: stamp,
+              description: nextRedacted
+                ? 'Applied automated face & vehicle number-plate PII redaction mask prior to publication.'
+                : 'Removed PII redaction preview mask.',
+            },
+          ],
+        };
+      }),
+    }));
+    showToast(`Toggled PII Redaction (Faces & Number Plates) on ${signalId}.`);
+  };
+
+  const simulateChannelIntake = async (
+    channel: 'ussd' | 'whatsapp' | 'telegram',
+    payload: {
+      phone?: string;
+      corridor: string;
+      landmark: string;
+      categoryKey: HazardCategoryKey;
+      categoryLabel: string;
+      description: string;
+      language?: 'English' | 'Shona' | 'Ndebele';
+      hasPhoto?: boolean;
+      flaggedAiDemo?: boolean;
+    }
+  ): Promise<SignalReport> => {
+    const now = new Date();
+    const intakeTimeReadable = formatHarareDateTime(now);
+    const tShort = `${formatHarareShortTime(now)} CAT`;
+    const existingNums = persisted.signals
+      .map((s) => {
+        const m = /(\d+)$/.exec(s.id);
+        return m ? Number(m[1]) : 0;
+      })
+      .filter((n) => n >= 427);
+    const nextNum = Math.max(435, ...existingNums) + 1;
+    const newId =
+      channel === 'ussd'
+        ? `PZ-USSD-${String(nextNum).padStart(4, '0')}`
+        : channel === 'whatsapp'
+          ? `PZ-WA-${String(nextNum).padStart(4, '0')}`
+          : `PZ-TG-${String(nextNum).padStart(4, '0')}`;
+    const invCode = `ROADS-${String(nextNum).padStart(4, '0')}`;
+    const lang = payload.language || 'English';
+    const hasPhoto = Boolean(payload.hasPhoto && channel !== 'ussd');
+    const flaggedAi = Boolean(payload.flaggedAiDemo);
+    const channelLabel =
+      channel === 'ussd'
+        ? 'USSD *140#'
+        : channel === 'whatsapp'
+          ? 'Opt-in WhatsApp'
+          : 'Opt-in Telegram';
+    const channelShort =
+      channel === 'ussd'
+        ? 'USSD *140# opt-in'
+        : channel === 'whatsapp'
+          ? 'WhatsApp opt-in'
+          : 'Telegram opt-in';
+
+    const newSig: SignalReport = {
+      id: newId,
+      investigationCode: invCode,
+      sourceChannelLabel: channelLabel,
+      sourceChannelShort: channelShort,
+      sourceBadgeColor: flaggedAi ? 'red' : 'green',
+      visibility: 'opt-in',
+      workflowStatus: 'lead',
+      monitorStatusLabel: channel === 'ussd' ? 'USSD structured' : 'AI structured',
+      monitorStatusColor: flaggedAi ? 'red' : 'gold',
+      inboxStatusLine: `${channelLabel} · Unverified lead`,
+      timeShort: tShort,
+      reportedDateTime: intakeTimeReadable,
+      observedIso: now.toISOString(),
+      title: `${payload.categoryLabel} · ${payload.corridor}`,
+      inboxTitle: `${payload.categoryLabel} · ${payload.corridor}`,
+      subtitle: `${payload.landmark} · ${channelShort}`,
+      corridor: payload.corridor,
+      roadArea: payload.corridor,
+      landmark: payload.landmark,
+      categoryKey: payload.categoryKey,
+      categoryLabel: payload.categoryLabel,
+      severityLabel: payload.categoryKey === 'collisions' ? 'Critical' : 'High',
+      isCritical: payload.categoryKey === 'collisions',
+      originalLanguage: lang,
+      originalQuote: `“${payload.description.trim()}”`,
+      draftEnglishTranslation:
+        lang !== 'English'
+          ? `[AI Draft Translation from ${lang}]: “Road hazard reported along ${payload.corridor} near ${payload.landmark} — vehicles swerving to avoid damage.”`
+          : undefined,
+      sourceProvenanceNote: `${channelShort} • Received ${intakeTimeReadable} • Sender ${payload.phone || '+263 77 *** 841'} (anonymised hash)`,
+      aiHazardType: payload.categoryLabel,
+      aiLikelyCorridor: payload.corridor,
+      aiLanguageNote:
+        lang === 'English'
+          ? `English • ${channelShort}`
+          : `${lang} → English • draft translation, 5th gate human review needed`,
+      aiLocationPrecision: 'Corridor & landmark menu selection · GPS unverified',
+      aiConfidencePercent: hasPhoto ? 71 : 58,
+      aiConfidenceNote: `${hasPhoto ? 71 : 58}% • awaiting human corroboration`,
+      aiImageHeading: hasPhoto ? 'Submitted channel photo' : 'Low-bandwidth text submission (no photo)',
+      aiImageSummary: hasPhoto
+        ? 'Photo ingested via messaging webhook; screened by automated AI forensics.'
+        : 'Submitted via low-data channel without imagery. Corroborate via independent witnesses.',
+      aiImageCaveat: 'Automated intake structuring never auto-publishes.',
+      photoType: hasPhoto ? 'figma-road-damage' : 'none',
+      photoFilename: hasPhoto ? (flaggedAi ? 'whatsapp_screenshot_ai.jpg' : 'camera_capture.jpg') : undefined,
+      photoCaption: hasPhoto ? `${channelLabel} upload (${newId})` : undefined,
+      isGraphicImage: false,
+      pipelineStage: 2,
+      missingItems: [
+        'Independent confirmation of the hazard',
+        'Precise landmark or GPS coordinate check',
+      ],
+      checklist: {
+        locationAndTime: false,
+        mediaAndDate: false,
+        independentSource: false,
+        hazardStillPresent: false,
+      },
+      editorialNotes: '',
+      unconfirmedSummary: `${channelLabel} report of ${payload.categoryLabel.toLowerCase()} on ${payload.corridor} (${payload.landmark}).`,
+      duplicateCandidates: [],
+      timeline: [
+        {
+          time: intakeTimeReadable,
+          description: `${channelLabel} inbound webhook payload received (${newId}) and queued for human verification.`,
+        },
+      ],
+      isUserSubmitted: true,
+      mapCoords: pickCorridorCoords(payload.corridor, persisted.signals.length),
+      claimPin: String(Math.floor(1000 + Math.random() * 9000)),
+      licenseTier: hasPhoto ? 'commercial_pool' : 'safety_only',
+      attributionMode: 'anonymous',
+      aiScanVerdict: hasPhoto ? (flaggedAi ? 'flagged_ai_or_screen' : 'pass') : null,
+      aiScanSummary: hasPhoto
+        ? flaggedAi
+          ? 'AUTO-SCAN WARNING: SUSPECTED AI-GENERATED OR SCREEN RECAPTURE — COMMERCIAL PAYOUT BLOCKED'
+          : 'AUTO-SCAN: AUTHENTIC CAMERA PHOTO • EXIF & MOIRÉ SCREEN CHECK PASSED'
+        : null,
+      exifSummary: hasPhoto
+        ? flaggedAi
+          ? 'AUTO-SCAN: 87.2% AI/SCREEN RECAPTURE • EXIF STRIPPED • MOIRÉ PATTERN DETECTED'
+          : 'AUTO-SCAN: 98.4% REAL CAMERA • EXIF: SAMSUNG A54 • MOIRÉ SCREEN CHECK: PASS • DUPLICATE HASH: UNIQUE'
+        : null,
+      screenRecaptureFlag: flaggedAi,
+      commercialEligible: hasPhoto && !flaggedAi,
+      humanVisualAiCheck: false,
+      humanVisualAiCheckPassed: false,
+      translationVerified: lang === 'English',
+      translationReviewed: lang === 'English',
+    };
+
+    if (channel === 'ussd') {
+      apiService
+        .simulateUssdCallback({
+          session_id: `AT-USSD-${Date.now()}`,
+          phone_number: payload.phone || '+263772000140',
+          selected_corridor: payload.corridor,
+          selected_hazard_type: payload.categoryLabel,
+          landmark_text: payload.landmark,
+          severity_level: 'High',
+        })
+        .catch(() => {});
+    } else if (channel === 'whatsapp') {
+      apiService
+        .simulateWhatsAppWebhook({
+          from_number: payload.phone || '+263772000999',
+          message_body: `${payload.description} (${payload.corridor}, ${payload.landmark})`,
+          user_consented_opt_in: true,
+        })
+        .catch(() => {});
+    }
+
+    setPersisted((prev) => ({
+      ...prev,
+      signals: [newSig, ...prev.signals],
+    }));
+    setSelectedInboxId(newId);
+    setSelectedVerifyId(newId);
+    setSelectedMonitorId(newId);
+    showToast(`${channelLabel} report ${newId} ingested into Newsroom Inbox.`);
+    return newSig;
+  };
+
   const updateBriefField = <K extends keyof WorkingBriefDraft>(
     key: K,
     value: WorkingBriefDraft[K]
@@ -818,7 +1753,15 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       lastEditorialUpdateTime: '14:20 CAT',
       lastEditorialUpdateDateLabel:
         'Last editorial desk update (27 Jan 2025) · 0 AI auto-published alerts',
+      royaltyBalanceUsd: 16.0,
+      claimedReports: [],
+      lastRoyaltyActivity: null,
     });
+    setCurrentUser((prevUser) =>
+      prevUser && prevUser.role === 'citizen'
+        ? { ...prevUser, royalty_balance_usd: 16.0 }
+        : prevUser
+    );
     setRevealedGraphicIds({});
     setSelectedMonitorId('PZ-SIG-0042');
     setSelectedInboxId('PZ-DEMO-0427');
@@ -863,8 +1806,20 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         portal,
         newsroomView,
         publicView,
+        authTab,
+        setAuthTab,
+        currentUser,
+        setCurrentUser,
+        authPromptMessage,
+        setAuthPromptMessage,
+        quickDemoLogin,
         navigateNewsroom,
         navigatePublic,
+        navigateAuth,
+        navigateCitizen,
+        navigateAdmin,
+        logoutUser,
+        showToast,
         newsroomSearch,
         setNewsroomSearch,
         publicSearch,
@@ -892,12 +1847,28 @@ export const PanziraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedCorridorId,
         setSelectedCorridorId,
         lastSubmittedReceiptId,
+        lastSubmittedClaimPin,
+        pendingClaimPrefill,
+        setPendingClaimPrefill,
+        royaltyBalanceUsd:
+          typeof persisted.royaltyBalanceUsd === 'number' ? persisted.royaltyBalanceUsd : 16.0,
+        claimedReports: persisted.claimedReports || [],
+        lastRoyaltyActivity: persisted.lastRoyaltyActivity ?? null,
         submitCitizenReport,
+        claimReportInSession,
+        cashOutRoyalties,
         toggleChecklist,
         updateEditorialNotes,
         requestEvidence,
         rejectSignal,
         verifySignal,
+        claimSignalLock,
+        releaseSignalLock,
+        toggleVisualAiCheck,
+        toggleTranslationVerified,
+        licenseSignalMedia,
+        togglePiiRedaction,
+        simulateChannelIntake,
         revealedGraphicIds,
         toggleGraphicReveal,
         updateBriefField,

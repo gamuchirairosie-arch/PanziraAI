@@ -251,21 +251,17 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
 
   if (viewMode === 'real') {
     return (
-      <div style={{ position: 'relative' }}>
-        {/* Toggle Mode Switcher */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* Segmented Mode Switcher ABOVE map so it never overlaps Leaflet +/- zoom controls */}
         <div
           style={{
-            position: 'absolute',
-            top: '12px',
-            left: '60px',
-            zIndex: 1000,
-            background: 'rgba(255, 255, 255, 0.95)',
+            display: 'inline-flex',
+            alignSelf: 'flex-start',
+            background: '#f8faf9',
             border: '1px solid #dce2dc',
             borderRadius: '6px',
-            padding: '2px 4px',
-            display: 'flex',
-            gap: '4px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+            padding: '2px',
+            gap: '2px',
           }}
         >
           <button
@@ -275,14 +271,14 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
               border: 'none',
               background: '#145438',
               color: '#ffffff',
-              fontSize: '11px',
-              fontWeight: 700,
-              padding: '4px 8px',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              padding: '5px 10px',
               borderRadius: '4px',
               cursor: 'pointer',
             }}
           >
-            🗺️ Real Map (OSM)
+            Real Map (OSM)
           </button>
           <button
             type="button"
@@ -291,14 +287,14 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
               border: 'none',
               background: 'transparent',
               color: '#46524b',
-              fontSize: '11px',
+              fontSize: '11.5px',
               fontWeight: 600,
-              padding: '4px 8px',
+              padding: '5px 10px',
               borderRadius: '4px',
               cursor: 'pointer',
             }}
           >
-            📐 Schematic View
+            Schematic View
           </button>
         </div>
 
@@ -313,25 +309,16 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
   }
 
   return (
-    <div
-      className="pz-map-frame"
-      style={{ height: `${height}px` }}
-      aria-label="Bulawayo verified road hazards map"
-    >
-      {/* Toggle Mode Switcher */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <div
         style={{
-          position: 'absolute',
-          top: '12px',
-          left: '12px',
-          zIndex: 20,
-          background: 'rgba(255, 255, 255, 0.95)',
+          display: 'inline-flex',
+          alignSelf: 'flex-start',
+          background: '#f8faf9',
           border: '1px solid #dce2dc',
           borderRadius: '6px',
-          padding: '2px 4px',
-          display: 'flex',
-          gap: '4px',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+          padding: '2px',
+          gap: '2px',
         }}
       >
         <button
@@ -341,14 +328,14 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
             border: 'none',
             background: 'transparent',
             color: '#46524b',
-            fontSize: '11px',
+            fontSize: '11.5px',
             fontWeight: 600,
-            padding: '4px 8px',
+            padding: '5px 10px',
             borderRadius: '4px',
             cursor: 'pointer',
           }}
         >
-          🗺️ Real Map (OSM)
+          Real Map (OSM)
         </button>
         <button
           type="button"
@@ -357,16 +344,22 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
             border: 'none',
             background: '#145438',
             color: '#ffffff',
-            fontSize: '11px',
-            fontWeight: 700,
-            padding: '4px 8px',
+            fontSize: '11.5px',
+            fontWeight: 600,
+            padding: '5px 10px',
             borderRadius: '4px',
             cursor: 'pointer',
           }}
         >
-          📐 Schematic View
+          Schematic View
         </button>
       </div>
+
+      <div
+        className="pz-map-frame"
+        style={{ height: `${height}px` }}
+        aria-label="Bulawayo verified road hazards map"
+      >
       {/* Interactive zoomable neutral basemap + dynamic pins */}
       <div
         style={{
@@ -518,6 +511,7 @@ export const PublicBulawayoMap: React.FC<PublicBulawayoMapProps> = ({
       <div className="pz-map-attribution">
         Bulawayo arterial basemap · Green: verified moderate · Red: verified critical/high severity
         (demo data)
+      </div>
       </div>
     </div>
   );

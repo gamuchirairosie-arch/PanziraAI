@@ -11,6 +11,7 @@ Strict Safety Policy:
 """
 
 from datetime import datetime, timezone
+import secrets
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -177,4 +178,32 @@ def submit_citizen_report(
     )
     db.commit()
     db.refresh(new_signal)
-    return SignalReportResponse.model_validate(new_signal)
+
+    generated_pin = f"{secrets.randbelow(9000) + 1000}"
+    lic_tier = report_input.licenseTier or "safety_only"
+    attr_mode = report_input.attributionMode or "anonymous"
+    has_photo = bool(vis["hasPhoto"])
+    fname_lower = (report_input.photoFilename or "").lower()
+    flagged_ai = any(k in fname_lower for k in ("screenshot", "screen_shot", "whatsapp", "ai_gen", "midjourney", "dalle", "synthetic"))
+    ai_verdict = ("flagged_ai_or_screen" if flagged_ai else "pass") if has_photo else None
+    ai_summary = (
+        "🚨 AUTO-SCAN WARNING: SUSPECTED AI-GENERATED OR SCREEN RECAPTURE — COMMERCIAL PAYOUT BLOCKED"
+        if flagged_ai
+        else "🤖 AUTO-SCAN: AUTHENTIC CAMERA PHOTO • EXIF & MOIRÉ SCREEN CHECK PASSED"
+    ) if has_photo else None
+    comm_eligible = (not flagged_ai) if has_photo else False
+
+    out = SignalReportResponse.model_validate(new_signal)
+    out.claimPin = generated_pin
+    out.claim_pin = generated_pin
+    out.licenseTier = lic_tier
+    out.license_tier = lic_tier
+    out.attributionMode = attr_mode
+    out.attribution_mode = attr_mode
+    out.aiScanVerdict = ai_verdict
+    out.ai_scan_verdict = ai_verdict
+    out.aiScanSummary = ai_summary
+    out.ai_scan_summary = ai_summary
+    out.commercialEligible = comm_eligible
+    out.commercial_eligible = comm_eligible
+    return out

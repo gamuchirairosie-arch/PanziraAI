@@ -165,6 +165,7 @@ def _run(db: Session, report: Report) -> None:
         report.duplicate_cluster_id = other.duplicate_cluster_id or f"CL-{min(report.id, other.id):04d}"
         if not other.duplicate_cluster_id:
             other.duplicate_cluster_id = report.duplicate_cluster_id
+        report.commercial_eligible = False
         uncertainty.append("possible_duplicate_of_existing_report")
 
     # 8. confidence (never authorises publication)
@@ -192,6 +193,9 @@ def _run(db: Session, report: Report) -> None:
         "duplicates": dups[:5],
         "images": [{"id": e.id, "graphic_score": e.graphic_score, "phash": e.phash, "exif": e.exif,
                     "analysis": e.analysis} for e in evs],
+        "ai_scan_verdict": report.ai_scan_verdict,
+        "ai_scan_summary": report.ai_scan_summary,
+        "commercial_eligible": report.commercial_eligible,
         "provenance_notes": image_notes,
         "processed_at": utcnow().isoformat(),
     }
